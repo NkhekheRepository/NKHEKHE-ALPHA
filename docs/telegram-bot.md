@@ -1,15 +1,29 @@
 # Telegram Watchtower Bot
 
-Real-time monitoring bot (@NkhekheAlphaBot) for the Financial Orchestrator system.
+Real-time monitoring bot (@NkhekheAlphaBot) for the Financial Orchestrator system with modern inline keyboard UI.
 
 ## Features
 
 - **Admin-only Access**: Only authorized chat IDs can interact
+- **Modern UI**: Inline keyboard with clickable buttons
 - **Real-time Monitoring**: Log tailing and event monitoring
 - **Proactive Alerts**: Automatic notifications for ERROR/CRITICAL events
 - **Resource Monitoring**: Memory, CPU, disk usage tracking
-- **Health Reports**: Hourly system health summaries
+- **Health Reports**: 5-minute heartbeat status updates
 - **Command Interface**: Rich set of management commands
+
+## Main Menu UI
+
+When you send `/start` or `/menu`, you get a modern inline keyboard:
+
+```
+[🟢 System On] [🔴 System Off] [🔄 Restart]
+[📊 Status] [📈 Metrics] [🔔 Alerts]
+[📁 Workflows] [💻 Agents] [📄 Logs]
+[🔒 Hide Menu]
+```
+
+Click any button to execute that action!
 
 ## Architecture
 
@@ -17,14 +31,15 @@ Real-time monitoring bot (@NkhekheAlphaBot) for the Financial Orchestrator syste
 ┌─────────────────────────────────────────────────────────────┐
 │                    TELEGRAM BOT                             │
 │                                                             │
-│  User ───► /command ───► Command Processor                  │
+│  User ───► /menu ───► Bot Menu (Inline Keyboard)          │
 │              │                                              │
 │              ▼                                              │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │              BOT CONTROLLER                          │   │
-│  │  • Polling (2s interval)                            │   │
-│  │  • Admin Security (chat_id filter)                   │   │
-│  │  • Message Queue                                     │   │
+│  │  • Polling (5s interval)                            │   │
+│  │  • Admin Security (chat_id filter)                 │   │
+│  │  • Callback Query Handler                           │   │
+│  │  • Inline Keyboard Support                          │   │
 │  └─────────────────────────────────────────────────────┘   │
 │              │                                              │
 │    ┌─────────┼─────────┬──────────┐                        │
@@ -45,7 +60,12 @@ Real-time monitoring bot (@NkhekheAlphaBot) for the Financial Orchestrator syste
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `/start` | - | Start the bot, show welcome message |
+| `/start` | - | Welcome message + main menu |
+| `/menu` | - | Show main menu anytime |
+| `/hide` | - | Hide inline keyboard |
+| `/systemon` | - | Start all 5 components |
+| `/systemoff` | - | Stop all 5 components |
+| `/sys` | - | Quick status check |
 | `/status` | `/s` | Get system status overview |
 | `/metrics` | `/m` | Show detailed system metrics |
 | `/workflows` | `/wf` | List active workflows and status |
@@ -98,7 +118,7 @@ watchtower:
     
   health_check:
     enabled: true
-    interval_seconds: 3600  # 1 hour
+    interval_seconds: 300  # 5 minutes
 ```
 
 ## Getting Your Bot Token

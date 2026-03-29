@@ -136,13 +136,40 @@ Multi-level validation (basic → standard → strict → paranoid):
 - Model output validation
 
 ### 6. Telegram Watchtower
-Real-time monitoring bot (@NkhekheAlphaBot):
+Real-time monitoring bot (@NkhekheAlphaBot) with modern inline keyboard UI:
 
-- Admin-only access (chat_id protection)
-- Commands: /status, /metrics, /workflows, /agents, /logs, /alerts, /help
+**Commands:**
+| Command | Description |
+|---------|-------------|
+| `/start` | Welcome message + main menu |
+| `/menu` | Show main menu anytime |
+| `/hide` | Hide inline keyboard |
+| `/systemon` | Start all 5 components |
+| `/systemoff` | Stop all 5 components |
+| `/sys` | Quick status check |
+| `/status` | Detailed system status |
+| `/metrics` | System metrics |
+| `/workflows` | Active workflows |
+| `/agents` | Agent statuses |
+| `/logs` | Recent logs |
+| `/alerts` | Recent alerts |
+| `/help` | Show all commands |
+
+**Main Menu Buttons:**
+```
+[🟢 System On] [🔴 System Off] [🔄 Restart]
+[📊 Status] [📈 Metrics] [🔔 Alerts]
+[📁 Workflows] [💻 Agents] [📄 Logs]
+[🔒 Hide Menu]
+```
+
+**Features:**
+- Admin-only access (chat_id protection: 7361240735)
+- Modern inline keyboard with clickable buttons
 - Proactive alerts for ERROR/CRITICAL events
 - Resource monitoring (memory, disk)
-- Hourly health reports
+- 5-minute health check heartbeats
+- Automatic status change notifications
 
 ## Directory Structure
 
@@ -194,6 +221,7 @@ financial_orchestrator/
 ├── telegram_watchtower/         # Telegram bot
 │   ├── bot_controller.py
 │   ├── command_processor.py
+│   ├── bot_menu.py             # Inline keyboard menus
 │   ├── event_monitor.py
 │   ├── log_tailer.py
 │   ├── config.yaml

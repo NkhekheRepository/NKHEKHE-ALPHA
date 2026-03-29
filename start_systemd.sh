@@ -36,6 +36,12 @@ is_running() {
     return 1
 }
 
+stop_by_pattern() {
+    local pattern=$1
+    pkill -f "$pattern" 2>/dev/null && sleep 1
+    pkill -9 -f "$pattern" 2>/dev/null || true
+}
+
 stop_component() {
     local name=$1
     local pid_file=$(get_pid_file "$name")
@@ -97,11 +103,18 @@ start_component() {
     return 1
 }
 
-# Stop any running components first
-for key in "${!COMPONENTS[@]}"; do
-    stop_component "$key"
-done
+# Stop any running components first (kill by pattern to avoid duplicates)
+stop_by_pattern "telegram_watchtower/bot_controller.py"
+stop_by_pattern "monitoring/risk_monitor.py"
+stop_by_pattern "validation/validation_engine.py"
+stop_by_pattern "optimization/agent_optimizer.py"
+stop_by_pattern "workflows/process_workflow.py"
 sleep 2
+
+# Clean up stale PID files
+for key in "${!COMPONENTS[@]}"; do
+    rm -f $(get_pid_file "$key")
+done
 
 # Start all components
 component_list=""

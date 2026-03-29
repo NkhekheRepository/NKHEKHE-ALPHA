@@ -8,8 +8,14 @@ import logging
 import json
 import os
 import sys
+import subprocess
 from datetime import datetime
 from typing import Dict, Optional
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 logger = logging.getLogger('CommandProcessor')
 
@@ -21,6 +27,8 @@ class CommandProcessor:
         self.command_handlers = {
             '/start': self.cmd_start,
             '/hello': self.cmd_start,
+            '/menu': self.cmd_menu,
+            '/hide': self.cmd_hide,
             '/status': self.cmd_status,
             '/s': self.cmd_status,
             '/workflows': self.cmd_workflows,
@@ -33,6 +41,9 @@ class CommandProcessor:
             '/m': self.cmd_metrics,
             '/alerts': self.cmd_alerts,
             '/a': self.cmd_alerts,
+            '/systemon': self.cmd_system_on,
+            '/systemoff': self.cmd_system_off,
+            '/sys': self.cmd_quick_status,
             '/help': self.cmd_help,
             '/h': self.cmd_help,
             '/?': self.cmd_help,
@@ -54,20 +65,60 @@ class CommandProcessor:
         else:
             return f"Unknown command: {command}\nType /help for available commands."
     
+    def get_main_menu_keyboard(self):
+        """Get the main menu keyboard"""
+        return [
+            [
+                {"text": "🟢 System On", "callback_data": "sys_on"},
+                {"text": "🔴 System Off", "callback_data": "sys_off"},
+                {"text": "🔄 Restart", "callback_data": "sys_restart"},
+            ],
+            [
+                {"text": "📊 Status", "callback_data": "st_quick"},
+                {"text": "📈 Metrics", "callback_data": "st_metrics"},
+                {"text": "🔔 Alerts", "callback_data": "info_alerts"},
+            ],
+            [
+                {"text": "📁 Workflows", "callback_data": "info_wf"},
+                {"text": "💻 Agents", "callback_data": "info_ag"},
+                {"text": "📄 Logs", "callback_data": "info_logs"},
+            ],
+            [
+                {"text": "🔒 Hide Menu", "callback_data": "hide"},
+            ],
+        ]
+    
     def cmd_start(self, chat_id: int, text: str, bot) -> str:
-        """Handle /start command"""
+        """Handle /start command - Show welcome with menu"""
         response = [
-            "*Welcome to Financial Orchestrator Watch Tower!*\n",
-            f"\ud83c\udfe2 Bot: {self.config['watchtower']['name']}",
-            f"\ud83d\udcbb Version: {self.config['watchtower']['version']}\n",
-            "\ud83d\udcfa *Quick Commands:*",
-            "  /status - System status",
-            "  /metrics - System metrics",
-            "  /logs - Recent logs",
-            "  /help - Full help\n",
-            "I will notify you of system events, alerts, and workflow updates in real-time!"
+            "🤖 *Financial Orchestrator Watch Tower*",
+            "━━━━━━━━━━━━━━━━━━",
+            "",
+            "✅ *System Status:* Online",
+            f"📅 *Version:* {self.config['watchtower']['version']}",
+            "🔐 *Access:* Admin Authorized",
+            "",
+            "━━━━━━━━━━━━━━━━━━",
+            "",
+            "I will notify you of system events, alerts, and workflow updates in real-time.",
+            "",
+            "*Use the menu below or type commands directly.*"
         ]
         return "\n".join(response)
+    
+    def cmd_menu(self, chat_id: int, text: str, bot) -> str:
+        """Handle /menu command - Show main menu"""
+        response = [
+            "✨ *Main Menu*",
+            "━━━━━━━━━━━━━━━━━━",
+            "",
+            "Select an option below to control and monitor your system."
+        ]
+        return "\n".join(response)
+    
+    def cmd_hide(self, chat_id: int, text: str, bot) -> str:
+        """Handle /hide command - Hide menu"""
+        return "🔒 Menu hidden. Send /menu to show it again."
     
     def cmd_status(self, chat_id: int, text: str, bot) -> str:
         """Get system status"""
@@ -217,20 +268,119 @@ class CommandProcessor:
         
         return "\n".join(response)
     
+    def cmd_system_on(self, chat_id: int, text: str, bot) -> str:
+        """Start the entire system"""
+        logger.info(f"System start requested by chat_id={chat_id}")
+        
+        script_path = '/home/ubuntu/financial_orchestrator/start_systemd.sh'
+        
+        if not os.path.exists(script_path):
+            return "❌ Start script not found"
+        
+        try:
+            result = subprocess.run(
+                ['/bin/bash', script_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                return "✅ *System Starting*\n\nAll components are being started. You will receive a confirmation message shortly."
+            else:
+                logger.error(f"Start script failed: {result.stderr}")
+                return f"❌ Start failed: {result.stderr[:200]}"
+        except subprocess.TimeoutExpired:
+            return "❌ Start command timed out"
+        except Exception as e:
+            logger.error(f"Start command error: {e}")
+            return f"❌ Error: {str(e)}"
+    
+    def cmd_system_off(self, chat_id: int, text: str, bot) -> str:
+        """Stop the entire system"""
+        logger.info(f"System stop requested by chat_id={chat_id}")
+        
+        script_path = '/home/ubuntu/financial_orchestrator/stop_systemd.sh'
+        
+        if not os.path.exists(script_path):
+            return "❌ Stop script not found"
+        
+        try:
+            result = subprocess.run(
+                ['/bin/bash', script_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                return "🛑 *System Stopping*\n\nAll components are being stopped. You will receive a confirmation message."
+            else:
+                logger.error(f"Stop script failed: {result.stderr}")
+                return f"❌ Stop failed: {result.stderr[:200]}"
+        except subprocess.TimeoutExpired:
+            return "❌ Stop command timed out"
+        except Exception as e:
+            logger.error(f"Stop command error: {e}")
+            return f"❌ Error: {str(e)}"
+    
+    def cmd_quick_status(self, chat_id: int, text: str, bot) -> str:
+        """Quick status check of all components"""
+        logs_dir = '/home/ubuntu/financial_orchestrator/logs'
+        
+        components = [
+            ('telegram', 'Telegram Bot'),
+            ('risk', 'Risk Monitor'),
+            ('validation', 'Validation Engine'),
+            ('optimizer', 'Agent Optimizer'),
+            ('workflow', 'Workflow Processor')
+        ]
+        
+        response = ["*System Status*\n"]
+        all_running = True
+        
+        for key, name in components:
+            pid_file = os.path.join(logs_dir, f'{key}.pid')
+            if os.path.exists(pid_file):
+                try:
+                    pid = int(open(pid_file).read().strip())
+                    if psutil and psutil.pid_exists(pid):
+                        response.append(f"✅ {name}")
+                    else:
+                        if os.path.exists(f'/proc/{pid}'):
+                            response.append(f"✅ {name}")
+                        else:
+                            response.append(f"❌ {name} (stale PID)")
+                            all_running = False
+                except:
+                    response.append(f"❌ {name} (error)")
+                    all_running = False
+            else:
+                response.append(f"❌ {name} (not running)")
+                all_running = False
+        
+        response.append(f"\n{'🟢 All systems operational' if all_running else '⚠️ Some systems down'}")
+        
+        return "\n".join(response)
+    
     def cmd_help(self, chat_id: int, text: str, bot) -> str:
         """Get help message"""
         response = [
             "*Financial Orchestrator Watch Tower*\n",
             f"Version: {self.config['watchtower']['version']}\n",
-            "*Available Commands:*\n",
-            "\ud83d\udccb `/status` - System status",
-            "\ud83d\udcc2 `/workflows` - Active workflows",
-            "\ud83d\udcbb `/agents` - Agent statuses",
-            "\ud83d\udcc4 `/logs` - Recent logs",
-            "\ud83d\udca1 `/metrics` - System metrics",
-            "\ud83d\udd14 `/alerts` - Recent alerts",
-            "\ud83d\udcfa `/help` - Show this help",
-            "\n*Shortcuts:* `/s`, `/wf`, `/ag`, `/m`, `/a`, `/h`"
+            "*System Control:*\n",
+            "🟢 `/systemon` - Start all components",
+            "🔴 `/systemoff` - Stop all components",
+            "📊 `/sys` - Quick status check\n",
+            "*System Info:*\n",
+            "📋 `/status` - Detailed status",
+            "📁 `/workflows` - Active workflows",
+            "💻 `/agents` - Agent statuses",
+            "📄 `/logs` - Recent logs",
+            "📡 `/metrics` - System metrics",
+            "🔔 `/alerts` - Recent alerts",
+            "📖 `/help` - Show this help\n",
+            "*Shortcuts:* `/s`, `/wf`, `/ag`, `/m`, `/a`, `/h`"
         ]
         
         return "\n".join(response)

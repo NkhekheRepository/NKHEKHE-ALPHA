@@ -16,14 +16,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 from telegram_notify import send_to_admin, send_alert
 
 COMPONENTS = {
-    'telegram_watchtower/bot_controller.py': 'Telegram Bot',
-    'monitoring/risk_monitor.py': 'Risk Monitor',
-    'validation/validation_engine.py': 'Validation Engine',
-    'optimization/agent_optimizer.py': 'Agent Optimizer',
-    'workflows/process_workflow.py': 'Workflow Processor'
+    'telegram_watchtower/bot_controller.py': ('Telegram Bot', 'telegram.pid'),
+    'monitoring/risk_monitor.py': ('Risk Monitor', 'risk.pid'),
+    'validation/validation_engine.py': ('Validation Engine', 'validation.pid'),
+    'optimization/agent_optimizer.py': ('Agent Optimizer', 'optimizer.pid'),
+    'workflows/process_workflow.py': ('Workflow Processor', 'workflow.pid')
 }
 
 HEALTH_LOG = Path(__file__).parent / 'logs' / 'health_check.log'
+STATUS_FILE = Path(__file__).parent / 'logs' / 'status_state.json'
 
 def log(message):
     """Log to file and print"""
@@ -33,6 +34,51 @@ def log(message):
     HEALTH_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(HEALTH_LOG, 'a') as f:
         f.write(line + '\n')
+
+def load_previous_status():
+    """Load previous status from file"""
+    try:
+        if STATUS_FILE.exists():
+            with open(STATUS_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        log(f"Could not load previous status: {e}")
+    return {}
+
+def save_current_status(status):
+    """Save current status to file"""
+    try:
+        STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(STATUS_FILE, 'w') as f:
+            json.dump(status, f)
+    except Exception as e:
+        log(f"Could not save status: {e}")
+
+def detect_status_change(previous_status, current_status):
+    """Detect status changes and return alert type and details"""
+    prev_running = {k: v.get('running', False) for k, v in previous_status.items()}
+    curr_running = {k: v.get('running', False) for k, v in current_status.items()}
+    
+    went_down = []
+    recovered = []
+    
+    for component in curr_running:
+        was_running = prev_running.get(component, False)
+        is_running = curr_running[component]
+        
+        if not was_running and is_running:
+            recovered.append(component)
+        elif was_running and not is_running:
+            went_down.append(component)
+    
+    if went_down and not recovered:
+        return 'DOWN', went_down
+    elif recovered and not went_down:
+        return 'RECOVERY', recovered
+    elif went_down and recovered:
+        return 'PARTIAL', {'down': went_down, 'recovered': recovered}
+    
+    return 'OK', None
 
 def check_component_running(name, pid_file):
     """Check if a component is running"""
@@ -74,8 +120,8 @@ def check_processes():
     results = {}
     logs_dir = Path(__file__).parent / 'logs'
     
-    for script, name in COMPONENTS.items():
-        pid_file = logs_dir / f"{Path(script).stem}.pid"
+    for script, (name, pid_file_name) in COMPONENTS.items():
+        pid_file = logs_dir / pid_file_name
         result = check_component_running(name, pid_file)
         results[name] = result
     
@@ -112,22 +158,90 @@ def format_health_report(system_stats, component_status):
     
     return '\n'.join(report)
 
+def format_status_change_message(change_type, details, system_stats):
+    """Format status change notification for Telegram"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    if change_type == 'DOWN':
+        components = ', '.join(details)
+        return f"""🚨 *COMPONENT DOWN ALERT*
+
+⚠️ Components stopped:
+• {components}
+
+Time: {timestamp}
+
+Run health check manually to diagnose."""
+
+    elif change_type == 'RECOVERY':
+        components = ', '.join(details)
+        return f"""✅ *RECOVERY ALERT*
+
+🟢 Components recovered:
+• {components}
+
+Time: {timestamp}
+
+All systems back online!"""
+
+    elif change_type == 'PARTIAL':
+        down = ', '.join(details['down'])
+        recovered = ', '.join(details['recovered'])
+        return f"""⚠️ *PARTIAL STATUS CHANGE*
+
+🟢 Recovered:
+• {recovered}
+
+🔴 Down:
+• {down}
+
+Time: {timestamp}"""
+
+    return None
+
+def format_heartbeat_message(system_stats, component_status):
+    """Format minimal heartbeat message for all OK"""
+    timestamp = datetime.now().strftime('%H:%M')
+    return f"""💚 *HEARTBEAT* - {timestamp}
+
+✅ All 5 services running"""
+
 def send_health_check():
     """Perform health check and send report"""
     log("Starting health check...")
     
+    previous_status = load_previous_status()
     system_stats = get_system_stats()
     component_status = check_processes()
     
-    report = format_health_report(system_stats, component_status)
+    change_type, change_details = detect_status_change(previous_status, component_status)
     
-    if system_stats and all(s.get('running', False) for s in component_status.values()):
-        send_to_admin(report)
-    else:
-        send_alert("Health Check", "WARNING", "Some components not running", report)
+    save_current_status(component_status)
+    
+    all_running = all(s.get('running', False) for s in component_status.values())
+    
+    if change_type == 'DOWN':
+        message = format_status_change_message(change_type, change_details, system_stats)
+        send_to_admin(message if message else "🚨 Components down!")
+        log(f"ALERT: Components down: {change_details}")
+        
+    elif change_type == 'RECOVERY':
+        message = format_status_change_message(change_type, change_details, system_stats)
+        send_to_admin(message if message else "✅ Components recovered!")
+        log(f"RECOVERY: Components recovered: {change_details}")
+        
+    elif change_type == 'PARTIAL':
+        message = format_status_change_message(change_type, change_details, system_stats)
+        send_to_admin(message if message else "⚠️ Mixed status change")
+        log(f"MIXED: {change_details}")
+        
+    elif all_running:
+        message = format_heartbeat_message(system_stats, component_status)
+        send_to_admin(message)
+        log("Heartbeat: All systems OK")
     
     log("Health check completed")
-    return all(s.get('running', False) for s in component_status.values())
+    return all_running
 
 def run_once():
     """Run health check once"""

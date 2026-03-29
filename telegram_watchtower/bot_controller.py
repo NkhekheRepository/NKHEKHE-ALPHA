@@ -85,10 +85,12 @@ class TelegramWatchtower:
             from telegram_watchtower.event_monitor import EventMonitor
             from telegram_watchtower.log_tailer import LogTailer
             from telegram_watchtower.command_processor import CommandProcessor
+            from telegram_watchtower.bot_menu import BotMenu
             
             self.event_monitor = EventMonitor(self.config)
             self.log_tailer = LogTailer(self.config)
             self.command_processor = CommandProcessor(self.config)
+            self.bot_menu = BotMenu(self.config)
             
             logger.info("All components initialized successfully")
             return True
@@ -144,7 +146,7 @@ class TelegramWatchtower:
         self.status = BotStatus.STOPPED
         logger.info("Watch Tower stopped")
     
-    def send_message(self, chat_id: int, text: str, parse_mode: str = 'Markdown') -> bool:
+    def send_message(self, chat_id: int, text: str, parse_mode: str = 'Markdown', reply_markup: str = None) -> bool:
         """Send a message to a chat"""
         if not self.bot_token or self.bot_token == 'YOUR_BOT_TOKEN_HERE':
             logger.debug(f"Would send message to {chat_id}: {text[:50]}...")
@@ -155,6 +157,8 @@ class TelegramWatchtower:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
             safe_text = text.encode('utf-8', errors='replace').decode('utf-8')
             data = {'chat_id': chat_id, 'text': safe_text, 'parse_mode': parse_mode}
+            if reply_markup:
+                data['reply_markup'] = reply_markup
             response = requests.post(url, data=data, timeout=10)
             if response.status_code != 200:
                 logger.error(f"Failed to send: {response.text}")
@@ -168,6 +172,29 @@ class TelegramWatchtower:
             logger.error(f"Failed to send message: {e}")
             return False
     
+    def send_keyboard(self, chat_id: int, text: str, keyboard: List[List[Dict]], parse_mode: str = 'Markdown') -> bool:
+        """Send a message with inline keyboard"""
+        import json
+        reply_markup = json.dumps({'inline_keyboard': keyboard})
+        return self.send_message(chat_id, text, parse_mode, reply_markup)
+    
+    def answer_callback_query(self, callback_query_id: str, text: str = None) -> bool:
+        """Answer a callback query"""
+        if not self.bot_token or self.bot_token == 'YOUR_BOT_TOKEN_HERE':
+            return True
+        
+        try:
+            import requests
+            url = f"https://api.telegram.org/bot{self.bot_token}/answerCallbackQuery"
+            data = {'callback_query_id': callback_query_id}
+            if text:
+                data['text'] = text
+            response = requests.post(url, data=data, timeout=10)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Failed to answer callback: {e}")
+            return False
+    
     def broadcast_to_admins(self, message: str) -> int:
         """Broadcast message to all admin users"""
         sent_count = 0
@@ -178,6 +205,9 @@ class TelegramWatchtower:
     
     def handle_update(self, update: Dict) -> Optional[str]:
         """Handle an incoming update from Telegram"""
+        if 'callback_query' in update:
+            return self.handle_callback_query(update['callback_query'])
+        
         if 'message' not in update:
             return None
         
@@ -187,7 +217,6 @@ class TelegramWatchtower:
         
         logger.info(f"Received message from chat_id={chat_id}: {text}")
         
-        # Authorize user (only admins can interact)
         if chat_id not in self.admin_chat_ids:
             logger.warning(f"Unauthorized access attempt from chat_id={chat_id}")
             self.send_message(chat_id, "⛔ Access denied. This bot is private.")
@@ -196,10 +225,49 @@ class TelegramWatchtower:
         if self.command_processor:
             response = self.command_processor.process(chat_id, text, self)
             if response and chat_id:
-                self.send_message(chat_id, response)
+                text_lower = text.strip().lower()
+                if text_lower in ['/start', '/hello', '/menu']:
+                    msg, keyboard = self.bot_menu.format_main_menu() if self.bot_menu else (response, None)
+                    self.send_keyboard(chat_id, msg, keyboard)
+                elif text_lower in ['/hide', '/systemon', '/systemoff']:
+                    self.send_message(chat_id, response)
+                else:
+                    keyboard = self.command_processor.get_main_menu_keyboard() if self.command_processor else None
+                    if keyboard:
+                        self.send_keyboard(chat_id, response, keyboard)
+                    else:
+                        self.send_message(chat_id, response)
             return response
         else:
             return "Bot initializing..."
+    
+    def handle_callback_query(self, callback_query: Dict) -> Optional[str]:
+        """Handle callback query from inline keyboard"""
+        callback_query_id = callback_query.get('id')
+        chat_id = callback_query.get('message', {}).get('chat', {}).get('id')
+        data = callback_query.get('data', '')
+        
+        logger.info(f"Callback query from chat_id={chat_id}: {data}")
+        
+        if chat_id not in self.admin_chat_ids:
+            self.answer_callback_query(callback_query_id, "⛔ Access denied")
+            return None
+        
+        if self.bot_menu:
+            response = self.bot_menu.handle_callback(data, chat_id, self)
+            self.answer_callback_query(callback_query_id)
+            
+            if response:
+                if data == 'hide':
+                    self.send_message(chat_id, response)
+                else:
+                    msg, keyboard = self.bot_menu.format_main_menu()
+                    self.send_keyboard(chat_id, response, keyboard)
+            
+            return response
+        
+        self.answer_callback_query(callback_query_id, "Menu not available")
+        return None
     
     def get_status(self) -> Dict:
         """Get current watch tower status"""
