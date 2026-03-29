@@ -25,6 +25,8 @@ COMPONENTS = {
 
 HEALTH_LOG = Path(__file__).parent / 'logs' / 'health_check.log'
 STATUS_FILE = Path(__file__).parent / 'logs' / 'status_state.json'
+HEARTBEAT_STATE_FILE = Path(__file__).parent / 'logs' / 'heartbeat_state.json'
+HEARTBEAT_THROTTLE_SECONDS = 3600
 
 def log(message):
     """Log to file and print"""
@@ -34,6 +36,27 @@ def log(message):
     HEALTH_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(HEALTH_LOG, 'a') as f:
         f.write(line + '\n')
+
+def should_send_heartbeat():
+    """Only send heartbeat once per hour max"""
+    try:
+        if HEARTBEAT_STATE_FILE.exists():
+            with open(HEARTBEAT_STATE_FILE, 'r') as f:
+                state = json.load(f)
+            last_sent = state.get('last_heartbeat', 0)
+            if time.time() - last_sent < HEARTBEAT_THROTTLE_SECONDS:
+                return False
+        return True
+    except:
+        return True
+
+def record_heartbeat_sent():
+    """Record that a heartbeat was sent"""
+    try:
+        with open(HEARTBEAT_STATE_FILE, 'w') as f:
+            json.dump({'last_heartbeat': time.time()}, f)
+    except Exception as e:
+        log(f"Could not save heartbeat state: {e}")
 
 def load_previous_status():
     """Load previous status from file"""
@@ -236,9 +259,13 @@ def send_health_check():
         log(f"MIXED: {change_details}")
         
     elif all_running:
-        message = format_heartbeat_message(system_stats, component_status)
-        send_to_admin(message)
-        log("Heartbeat: All systems OK")
+        if should_send_heartbeat():
+            message = format_heartbeat_message(system_stats, component_status)
+            send_to_admin(message)
+            record_heartbeat_sent()
+            log("Heartbeat: All systems OK")
+        else:
+            log("Heartbeat suppressed (throttled)")
     
     log("Health check completed")
     return all_running

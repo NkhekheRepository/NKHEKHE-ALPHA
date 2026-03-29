@@ -4,6 +4,7 @@ Event Monitor for Telegram Watch Tower
 Monitors system events and triggers notifications
 """
 
+import os
 import threading
 import time
 import logging
@@ -39,6 +40,8 @@ class EventMonitor:
             EventType.AGENT_EVENT: 0,
             EventType.SECURITY_EVENT: 0
         }
+        self.processed_log_lines: set = set()
+        self.last_log_size = 0
         
     def start(self):
         """Start event monitoring"""
@@ -110,15 +113,31 @@ class EventMonitor:
         """Check for risk alerts in log files"""
         try:
             risk_log = '/home/ubuntu/financial_orchestrator/logs/risk_monitor.log'
+            if not os.path.exists(risk_log):
+                return
+                
+            current_size = os.path.getsize(risk_log)
+            if current_size == self.last_log_size:
+                return
+            
             with open(risk_log, 'r') as f:
                 lines = f.readlines()
             
-            recent_lines = [l for l in lines[-100:] if 'ALERT' in l or 'WARNING' in l or 'CRITICAL' in l]
+            self.last_log_size = current_size
+            new_lines = [l for l in lines if l.strip() and hash(l.strip()) not in self.processed_log_lines]
             
-            for line in recent_lines[-5:]:
+            for line in new_lines[-20:]:
+                line_hash = hash(line.strip())
+                self.processed_log_lines.add(line_hash)
+                
+                if len(self.processed_log_lines) > 10000:
+                    self.processed_log_lines = set(list(self.processed_log_lines)[-5000:])
+                
                 if 'CRITICAL' in line:
                     self.record_event(EventType.RISK_ALERT, line.strip(), severity="critical")
                 elif 'WARNING' in line:
+                    self.record_event(EventType.RISK_ALERT, line.strip(), severity="warning")
+                elif 'ALERT' in line:
                     self.record_event(EventType.RISK_ALERT, line.strip(), severity="warning")
         except Exception as e:
             logger.error(f"Risk alert check error: {e}")

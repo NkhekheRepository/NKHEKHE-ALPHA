@@ -3,13 +3,13 @@
   "workflow_name": "Example Quant Research Workflow",
   "description": "Demonstration workflow for equity factor model development",
   "start_time": "2026-03-29T15:00:00Z",
-  "status": "running",
-  "current_phase": "Data Acquisition",
-  "progress_percentage": 15,
+  "status": "completed",
+  "current_phase": "Completed",
+  "progress_percentage": 100,
   "phases": [
     {
       "name": "Data Acquisition",
-      "status": "in_progress",
+      "status": "completed",
       "tasks": [
         {
           "id": "data_acq_001",
@@ -17,10 +17,10 @@
           "description": "Ingest price, volume, and fundamental data from OpenBB",
           "agent_type": "Data Engineer",
           "assigned_agent": "data_engineer_001",
-          "status": "running",
+          "status": "completed",
           "start_time": "2026-03-29T15:00:00Z",
           "estimated_duration": "30 minutes",
-          "progress_percentage": 60,
+          "progress_percentage": 100,
           "deliverables": [
             "Raw market data in standardized format"
           ],
@@ -37,20 +37,21 @@
           "description": "Ingest alternative data (news, sentiment, macroeconomic)",
           "agent_type": "Data Engineer",
           "assigned_agent": "data_engineer_001",
-          "status": "pending",
+          "status": "completed",
           "start_time": null,
           "estimated_duration": "45 minutes",
-          "progress_percentage": 0,
+          "progress_percentage": 100,
           "deliverables": [
             "Integrated alternative dataset"
           ],
-          "validation_results": {}
+          "validation_results": {},
+          "actual_end_time": "2026-03-29T16:58:44.080750Z"
         }
       ]
     },
     {
       "name": "Feature Engineering",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
         {
           "id": "feat_eng_001",
@@ -58,20 +59,21 @@
           "description": "Calculate technical indicators (moving averages, RSI, MACD, etc.)",
           "agent_type": "Data Engineer",
           "assigned_agent": "data_engineer_001",
-          "status": "pending",
+          "status": "completed",
           "start_time": null,
           "estimated_duration": "60 minutes",
-          "progress_percentage": 0,
+          "progress_percentage": 100,
           "deliverables": [
             "Technical indicator features"
           ],
-          "validation_results": {}
+          "validation_results": {},
+          "actual_end_time": "2026-03-29T16:59:16.084043Z"
         }
       ]
     }
   ],
-  "risk_score": 0.12999999999999998,
+  "risk_score": 0.3,
   "risk_level": "low",
-  "notes": "Workflow 15% complete. Current phase: Data Acquisition",
-  "last_updated": "2026-03-29T16:58:02.076586Z"
+  "notes": "Workflow 100% complete. Current phase: Completed",
+  "last_updated": "2026-03-29T17:34:03.964234Z"
 }
