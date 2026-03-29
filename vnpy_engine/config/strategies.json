@@ -1,0 +1,45 @@
+{
+  "strategies": [
+    {
+      "name": "RL_Strategy",
+      "symbol": "BTCUSDT",
+      "enabled": true,
+      "mode": "paper",
+      "parameters": {
+        "window_size": 50,
+        "risk_threshold": 0.1,
+        "learning_rate": 0.0003,
+        "gamma": 0.99
+      }
+    },
+    {
+      "name": "Momentum_Strategy",
+      "symbol": "ETHUSDT",
+      "enabled": false,
+      "mode": "paper",
+      "parameters": {
+        "fast_period": 10,
+        "slow_period": 30,
+        "risk_threshold": 0.15
+      }
+    },
+    {
+      "name": "MeanReversion",
+      "symbol": "BNBUSDT",
+      "enabled": false,
+      "mode": "paper",
+      "parameters": {
+        "lookback_period": 20,
+        "entry_threshold": 2.0,
+        "exit_threshold": 0.5
+      }
+    }
+  ],
+  "gateways": {
+    "binance": {
+      "enabled": true,
+      "mode": "paper",
+      "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+    }
+  }
+}

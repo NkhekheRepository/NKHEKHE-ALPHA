@@ -52,3 +52,13 @@ Thumbs.db
 *.key
 *.credentials
 .env
+
+# VN.PY
+vnpy_repo/
+
+# VN.PY Engine
+vnpy_engine/memory/
+vnpy_engine/logs/
+vnpy_engine/models/
+!vnpy_engine/config/
+!vnpy_engine/prometheus.yml
