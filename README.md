@@ -245,12 +245,45 @@ cd financial_orchestrator
 
 ### Starting the System
 
+#### Option 1: Master Startup Script (Recommended)
+
+Start all components with a single command:
+
 ```bash
-# Start Telegram monitoring bot
+# Start everything
+./start_system.sh
+
+# Stop everything
+./stop_system.sh
+```
+
+This starts:
+- Telegram Bot (@NkhekheAlphaBot)
+- Risk Monitor
+- Validation Engine
+- Agent Optimizer
+- Workflow Processor
+
+#### Option 2: Individual Components
+
+```bash
+# Telegram monitoring bot only
 ./telegram_watchtower/start_watchtower.sh
 
 # Or use systemd (after installation)
 sudo systemctl start telegram-watchtower
+```
+
+### Systemd Service (Production)
+
+```bash
+# Install the service
+sudo cp financial-orchestrator.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable financial-orchestrator
+
+# Start the service
+sudo systemctl start financial-orchestrator
 ```
 
 ## Configuration

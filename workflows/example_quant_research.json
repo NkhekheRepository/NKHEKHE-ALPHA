@@ -5,7 +5,7 @@
   "start_time": "2026-03-29T15:00:00Z",
   "status": "running",
   "current_phase": "Data Acquisition",
-  "progress_percentage": 25,
+  "progress_percentage": 15,
   "phases": [
     {
       "name": "Data Acquisition",
@@ -17,10 +17,10 @@
           "description": "Ingest price, volume, and fundamental data from OpenBB",
           "agent_type": "Data Engineer",
           "assigned_agent": "data_engineer_001",
-          "status": "completed",
+          "status": "running",
           "start_time": "2026-03-29T15:00:00Z",
           "estimated_duration": "30 minutes",
-          "progress_percentage": 100,
+          "progress_percentage": 60,
           "deliverables": [
             "Raw market data in standardized format"
           ],
@@ -70,8 +70,8 @@
       ]
     }
   ],
-  "risk_score": 0.14999999999999997,
+  "risk_score": 0.12999999999999998,
   "risk_level": "low",
-  "notes": "Workflow 25% complete. Current phase: Data Acquisition",
-  "last_updated": "2026-03-29T15:13:00.865030Z"
+  "notes": "Workflow 15% complete. Current phase: Data Acquisition",
+  "last_updated": "2026-03-29T16:58:02.076586Z"
 }

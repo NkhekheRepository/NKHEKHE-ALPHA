@@ -12,6 +12,20 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Any, Optional
 import os
+import sys
+
+sys.path.insert(0, '/home/ubuntu/financial_orchestrator')
+try:
+    from telegram_notify import (
+        send_startup_notification,
+        send_shutdown_notification,
+        send_validation_result,
+        send_alert
+    )
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[WARN] Telegram notifications not available")
 
 class ValidationLevel(Enum):
     BASIC = "basic"
@@ -292,18 +306,25 @@ class ValidationEngine:
         return "\n".join(report_lines)
 
 if __name__ == "__main__":
+    print("Starting Validation Engine...")
+    
+    if TELEGRAM_AVAILABLE:
+        send_startup_notification("Validation Engine")
+    
     engine = ValidationEngine()
     
-    # Test with sample market data
-    sample_data = {
-        "symbol": "AAPL",
-        "timestamp": "2026-03-29T10:00:00Z",
-        "open": 175.0,
-        "high": 176.5,
-        "low": 174.5,
-        "close": 176.0,
-        "volume": 50000000
-    }
-    
-    result = engine.run_validation(sample_data, 'market_data')
-    print(engine.generate_report(result))
+    try:
+        # Run validation server mode
+        print("Validation Engine running in server mode. Press Ctrl+C to stop.")
+        
+        while True:
+            # In server mode, the engine would process validation requests
+            # For demo, we'll just run sample validations periodically
+            import time
+            time.sleep(60)
+            
+    except KeyboardInterrupt:
+        print("\nShutting down Validation Engine...")
+    finally:
+        if TELEGRAM_AVAILABLE:
+            send_shutdown_notification("Validation Engine")

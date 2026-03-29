@@ -12,6 +12,19 @@ from datetime import datetime, timedelta
 import os
 import statistics
 from collections import defaultdict, deque
+import sys
+
+sys.path.insert(0, '/home/ubuntu/financial_orchestrator')
+try:
+    from telegram_notify import (
+        send_startup_notification,
+        send_shutdown_notification,
+        send_alert
+    )
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[WARN] Telegram notifications not available")
 
 class AgentOptimizer:
     def __init__(self, memory_base_path='/home/ubuntu/financial_orchestrator/memory'):
@@ -343,26 +356,24 @@ class AgentOptimizer:
 
 # Example usage
 if __name__ == "__main__":
+    print("Starting Agent Optimizer...")
+    
+    if TELEGRAM_AVAILABLE:
+        send_startup_notification("Agent Optimizer")
+    
     optimizer = AgentOptimizer()
     
     # Start optimization
     optimizer.start_optimization()
     
     try:
-        # Run for a demonstration period
-        time.sleep(60)  # Run for 1 minute
-        
-        # Print status
-        status = optimizer.get_optimization_status()
-        print(f"Optimization Status: {json.dumps(status, indent=2)}")
-        
-        # Show recommendations
-        recommendations = optimizer.generate_optimization_recommendations()
-        print(f"\nTop Recommendations ({len(recommendations)}):")
-        for i, rec in enumerate(recommendations[:5], 1):
-            print(f"{i}. {rec['type']}: {rec.get('agent_id', rec.get('workflow_id', 'unknown'))} - {rec['reason']}")
-        
+        # Run indefinitely
+        while True:
+            time.sleep(10)
+            
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        print("\nShutting down Agent Optimizer...")
     finally:
         optimizer.stop_optimization()
+        if TELEGRAM_AVAILABLE:
+            send_shutdown_notification("Agent Optimizer")

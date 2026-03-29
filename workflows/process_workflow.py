@@ -9,6 +9,19 @@ import time
 import threading
 from datetime import datetime, timedelta
 import os
+import sys
+
+sys.path.insert(0, '/home/ubuntu/financial_orchestrator')
+try:
+    from telegram_notify import (
+        send_startup_notification,
+        send_shutdown_notification,
+        send_workflow_update
+    )
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[WARN] Telegram notifications not available")
 
 class WorkflowProcessor:
     def __init__(self, workflow_path='/home/ubuntu/financial_orchestrator/workflows/example_quant_research.json'):
@@ -224,21 +237,24 @@ class WorkflowProcessor:
 
 # Example usage
 if __name__ == "__main__":
+    print("Starting Workflow Processor...")
+    
+    if TELEGRAM_AVAILABLE:
+        send_startup_notification("Workflow Processor")
+    
     processor = WorkflowProcessor()
     
     # Start processing
     processor.start_processing()
     
     try:
-        # Let it run for a while
-        time.sleep(30)  # Run for 30 seconds
-        
-        # Print current status
-        status = processor.get_status()
-        print("\nCurrent Workflow Status:")
-        print(json.dumps(status, indent=2))
-        
+        # Run indefinitely
+        while True:
+            time.sleep(10)
+            
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        print("\nShutting down Workflow Processor...")
     finally:
         processor.stop_processing()
+        if TELEGRAM_AVAILABLE:
+            send_shutdown_notification("Workflow Processor")

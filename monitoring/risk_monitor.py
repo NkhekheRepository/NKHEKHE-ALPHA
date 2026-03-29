@@ -12,6 +12,20 @@ from datetime import datetime, timedelta
 from enum import Enum
 import json
 import os
+import sys
+
+sys.path.insert(0, '/home/ubuntu/financial_orchestrator')
+try:
+    from telegram_notify import (
+        send_startup_notification, 
+        send_shutdown_notification,
+        send_risk_alert,
+        send_to_admin
+    )
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("[WARN] Telegram notifications not available")
 
 # Setup logging
 logging.basicConfig(
@@ -156,7 +170,17 @@ class RiskMonitor:
         else:
             logger.info(alert['message'])
             
-        # In a real implementation, this would send notifications via email, slack, etc.
+        # Send Telegram alert for high/critical levels
+        if risk_level in [RiskLevel.HIGH, RiskLevel.CRITICAL] and TELEGRAM_AVAILABLE:
+            try:
+                send_risk_alert(
+                    risk_score=risk_score,
+                    risk_level=risk_level.value,
+                    message=alert['message']
+                )
+            except Exception as e:
+                logger.error(f"Failed to send Telegram alert: {e}")
+        
         print(f"ALERT: {alert['message']}")
         
         return alert
@@ -235,20 +259,25 @@ class RiskMonitor:
 
 # Example usage
 if __name__ == "__main__":
+    print("Starting Risk Monitor...")
+    
+    # Send startup notification
+    if TELEGRAM_AVAILABLE:
+        send_startup_notification("Risk Monitor")
+    
     monitor = RiskMonitor()
     
     # Start monitoring
     monitor.start_monitoring()
     
     try:
-        # Run for a demonstration period
-        time.sleep(60)  # Run for 1 minute
-        
-        # Print status
-        status = monitor.get_current_status()
-        print(f"Current Status: {json.dumps(status, indent=2)}")
-        
+        # Run indefinitely until interrupted
+        while True:
+            time.sleep(10)
+            
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        print("\nShutting down Risk Monitor...")
     finally:
         monitor.stop_monitoring()
+        if TELEGRAM_AVAILABLE:
+            send_shutdown_notification("Risk Monitor")
