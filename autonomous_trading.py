@@ -9,11 +9,17 @@ Features:
 - Decision reports to Telegram (every 3 hours)
 - Daily comprehensive performance reports
 - HMM regime detection (bull, bear, volatile, sideways)
-- Self-learning engine with online training
+- Self-learning engine with online training from EVERY signal (not just trades)
 - Adaptive strategy switching
+- Exploration engine (epsilon-greedy, discover new edges)
+- Evolution engine (genetic algorithm strategy optimization)
+- Uncertainty model (Bayesian position sizing)
+- Model validator (walk-forward, Monte Carlo, OOS)
 - Risk engine with stop-loss (2%) and take-profit (5%)
 - Circuit breaker protection
 - Self-healing on API errors
+- Health monitoring
+- Model persistence (save/load)
 
 Usage:
     python autonomous_trading.py
@@ -31,6 +37,8 @@ import os
 import time
 import signal
 import threading
+import json
+import pickle
 from pathlib import Path
 from datetime import datetime
 from collections import deque
@@ -48,9 +56,18 @@ from paper_trading.layers.layer4_intelligence.adaptive_learning import AdaptiveL
 from paper_trading.layers.layer4_intelligence.ensemble import IntelligenceEnsemble
 from paper_trading.layers.layer3_signals.signal_aggregator import SignalAggregator
 
+# NEW: Previously orphaned modules now integrated
+from paper_trading.layers.layer4_intelligence.exploration_engine import ExplorationEngine
+from paper_trading.layers.layer4_intelligence.evolution_engine import EvolutionEngine
+from paper_trading.layers.layer4_intelligence.uncertainty_model import UncertaintyModel
+from paper_trading.layers.layer5_validation.model_validator import ModelValidator
+
 from paper_trading.layers.layer2_risk.risk_engine import RiskEngine
 from paper_trading.layers.layer2_risk.circuit_breaker import TradingCircuitBreaker
 from paper_trading.layers.layer6_orchestration.health_monitor import HealthMonitor
+
+# Model persistence directory
+MODEL_DIR = '/home/ubuntu/financial_orchestrator/memory/models'
 
 
 class DecisionReporter:
@@ -315,6 +332,20 @@ class AutonomousTrader:
         self.health_monitor = None
         self.decision_reporter = None
         
+        # NEW: Previously orphaned modules
+        self.exploration_engine = None
+        self.evolution_engine = None
+        self.uncertainty_model = None
+        self.model_validator = None
+        
+        # NEW: Track trade count for periodic validation/evolution
+        self._total_trade_count = 0
+        
+        # NEW: ML state for dashboard
+        self._last_validation_result = None
+        self._last_evolution_generation = 0
+        self._exploration_state = 'exploit'
+        
         self.current_regime = 'sideways'
         self.current_strategy = 'RlEnhancedCtaStrategy'
         
@@ -355,11 +386,12 @@ class AutonomousTrader:
             print(f"Alert error: {e}")
     
     def initialize(self):
-        print("🤖 Initializing Enhanced Autonomous Trader with Decision Reports...")
+        print("🤖 Initializing FULLY INTEGRATED Autonomous Trader...")
         
         self.trading_engine = TradingBotIntegration()
         self.trading_engine.initialize({'symbol': 'BTCUSDT', 'leverage': 75})
         
+        # ─── Core Intelligence Layer ───
         print("  📊 Initializing HMM Regime Detector...")
         self.hmm = HMMRegimeDetector({'n_states': 4, 'lookback_bars': 100})
         
@@ -369,6 +401,9 @@ class AutonomousTrader:
             'retrain_interval': 1800,
             'min_samples': 50
         })
+        
+        # Load persisted model if available
+        self._load_model()
         
         print("  🔄 Initializing Adaptive Learning...")
         self.adaptive = AdaptiveLearning({
@@ -381,9 +416,47 @@ class AutonomousTrader:
             }
         })
         
+        # ─── Signal Layer ───
         print("  🎯 Initializing Signal Aggregator...")
         self.signal_aggregator = SignalAggregator()
         
+        # ─── NEW: Previously Orphaned Modules — NOW INTEGRATED ───
+        print("  🔍 Initializing Exploration Engine (epsilon-greedy)...")
+        self.exploration_engine = ExplorationEngine({
+            'base_epsilon': 0.15,
+            'min_epsilon': 0.02,
+            'max_epsilon': 0.40,
+            'epsilon_decay': 0.995,
+            'degradation_threshold': -0.02
+        })
+        
+        print("  🧬 Initializing Evolution Engine (genetic algorithm)...")
+        self.evolution_engine = EvolutionEngine({
+            'population_size': 20,
+            'mutation_rate': 0.15,
+            'crossover_rate': 0.7,
+            'tournament_size': 3,
+            'elite_count': 2
+        })
+        
+        print("  🎲 Initializing Uncertainty Model (Bayesian sizing)...")
+        self.uncertainty_model = UncertaintyModel({
+            'confidence_window': 50,
+            'min_samples': 10,
+            'confidence_level': 0.95,
+            'uncertainty_discount': 0.5
+        })
+        
+        print("  ✅ Initializing Model Validator (walk-forward + Monte Carlo)...")
+        self.model_validator = ModelValidator({
+            'walk_forward_window': 100,
+            'oos_ratio': 0.3,
+            'monte_carlo_sims': 1000,
+            'significance_level': 0.05,
+            'min_samples': 30
+        })
+        
+        # ─── Risk Layer ───
         print("  🛡️ Initializing Risk Engine...")
         self.risk_engine = RiskEngine({
             'max_daily_loss_pct': 0.05,
@@ -399,18 +472,26 @@ class AutonomousTrader:
         print("  ❤️ Initializing Health Monitor...")
         self.health_monitor = HealthMonitor({'check_interval': 60})
         
-        print("  🎭 Initializing Intelligence Ensemble...")
+        # ─── Intelligence Ensemble — SHARES instances with autonomous trader ───
+        print("  🎭 Initializing Intelligence Ensemble (shared instances)...")
         self.ensemble = IntelligenceEnsemble({
             'hmm': {'enabled': True},
             'decision_tree': {'enabled': True},
             'self_learning': {'enabled': True},
-            'adaptive': {'enabled': True}
+            'adaptive': {'enabled': True},
+            # Pass shared instances so ensemble uses same data
+            'shared_hmm': self.hmm,
+            'shared_self_learning': self.self_learning,
+            'shared_adaptive': self.adaptive
         })
         
         print("  📱 Initializing Decision Reporter...")
         self.decision_reporter = DecisionReporter(self.telegram_token, self.admin_chat_id)
         
-        print("✅ Enhanced Autonomous Trader initialized with Decision Reports")
+        print("✅ FULLY INTEGRATED Autonomous Trader initialized")
+        print("   Components: HMM, SelfLearning, Adaptive, Ensemble,")
+        print("   Exploration, Evolution, Uncertainty, ModelValidator,")
+        print("   Risk, CircuitBreaker, HealthMonitor, DecisionReporter")
         return True
     
     def start(self):
@@ -541,8 +622,21 @@ class AutonomousTrader:
         return f'{int(seconds/3600)}h ago'
     
     def trading_loop(self):
+        """
+        Main trading loop — ALWAYS generates signals and collects data.
+        Fixes: deadlock when holding inherited positions, data collection on every bar.
+        """
         # Check daily reset
         self._check_daily_reset()
+        
+        # NEW: Health check at start of each loop
+        health_ok = True
+        if self.health_monitor:
+            try:
+                health_result = self.health_monitor.check()
+                health_ok = health_result.get('healthy', True) if isinstance(health_result, dict) else True
+            except Exception:
+                health_ok = True  # Don't block on health monitor errors
         
         status = self.trading_engine.get_status()
         position = status.get('position', {})
@@ -564,29 +658,65 @@ class AutonomousTrader:
             self.current_regime = regime
             self.current_strategy = self.adaptive.select_strategy(regime, {})
         
+        # FIX: ALWAYS generate signals — not just when flat.
+        # This breaks the deadlock where inherited positions blocked all learning.
+        signal_data = self._generate_signal(price)
+        action = signal_data.get('action', 'hold')
+        confidence = signal_data.get('confidence', 0)
+        
+        # Record signal for ranking — EVERY bar, not just when flat
+        self.daily_signals.append({
+            'action': action,
+            'confidence': confidence,
+            'regime': regime,
+            'price': price,
+            'timestamp': datetime.now()
+        })
+        
+        # NEW: Exploration engine decision
+        exploration_result = self.exploration_engine.should_explore()
+        self._exploration_state = exploration_result.action
+        is_exploring = exploration_result.should_explore
+        
+        if is_exploring:
+            confidence *= exploration_result.test_size_multiplier
+        
         if position_amt != 0:
             pnl_pct = (price - entry_price) / entry_price if entry_price > 0 else 0
-            print(f"[{timestamp}] ${price:,.2f} | Trades: {self.daily_trade_count}/5 | PnL: {pnl_pct:.2%} | Regime: {regime}")
+            print(f"[{timestamp}] ${price:,.2f} | Trades: {self.daily_trade_count}/5 | PnL: {pnl_pct:.2%} | Regime: {regime} | Signal: {action} ({confidence:.0%})")
             
+            # Manage existing position
             self._manage_position(position, price, balance)
         else:
-            signal_data = self._generate_signal(price)
-            action = signal_data.get('action', 'hold')
-            confidence = signal_data.get('confidence', 0)
+            print(f"[{timestamp}] ${price:,.2f} | Trades: {self.daily_trade_count}/5 | Signal: {action} ({confidence:.0%}) | Regime: {regime} | Explore: {exploration_result.action}")
             
-            # Record signal for ranking
-            self.daily_signals.append({
-                'action': action,
-                'confidence': confidence,
-                'regime': regime,
-                'price': price,
-                'timestamp': datetime.now()
-            })
-            
-            print(f"[{timestamp}] ${price:,.2f} | Trades: {self.daily_trade_count}/5 | Signal: {action} ({confidence:.0%}) | Regime: {regime}")
-            
-            if self._should_trade(action, confidence, balance, regime):
+            # Only open new positions if health check passed
+            if health_ok and self._should_trade(action, confidence, balance, regime):
                 self._open_position(action, balance, regime)
+        
+        # FIX: Collect experience on EVERY bar — not just on trade open/close
+        # This gives the model data every 30 seconds regardless of trades
+        self._collect_experience_on_bar(price, signal_data, regime)
+        
+        # NEW: Model validation every 50 trades
+        if self._total_trade_count > 0 and self._total_trade_count % 50 == 0:
+            try:
+                self._last_validation_result = self.model_validator.comprehensive_validation('BTCUSDT')
+                if not self._last_validation_result.get('valid', True):
+                    print(f"  ⚠️ Model validation FAILED: {self._last_validation_result.get('recommendation')}")
+            except Exception as e:
+                print(f"  Model validation error: {e}")
+        
+        # NEW: Evolution every 100 trades
+        if self._total_trade_count > 0 and self._total_trade_count % 100 == 0:
+            try:
+                self.evolution_engine.evolve()
+                self._last_evolution_generation = self.evolution_engine.generation
+                best = self.evolution_engine.get_best_genomes(1)
+                if best:
+                    print(f"  🧬 Evolution gen {self._last_evolution_generation}, best fitness: {best[0]['fitness']:.4f}")
+            except Exception as e:
+                print(f"  Evolution error: {e}")
         
         # Write dashboard state for Telegram
         self._write_dashboard_state()
@@ -686,9 +816,20 @@ class AutonomousTrader:
         return action in ['buy', 'sell']
     
     def _open_position(self, action: str, balance: float, regime: str = 'sideways'):
-        """Open a new position."""
-        position_value = balance * 0.05
+        """Open a new position with uncertainty-based sizing."""
+        base_position_value = balance * 0.05
         price = self.trading_engine.get_price()
+        
+        # NEW: Adjust position size using uncertainty model
+        market_data = {'price': price, 'price_history': list(self.price_history)}
+        uncertainty_pred = self.uncertainty_model.predict('BTCUSDT', market_data, regime)
+        
+        if uncertainty_pred.confidence > 0:
+            position_value = self.uncertainty_model.adjust_position_size(base_position_value, uncertainty_pred)
+            print(f"  📐 Uncertainty adjustment: ${base_position_value:.2f} → ${position_value:.2f} (conf={uncertainty_pred.confidence:.2f})")
+        else:
+            position_value = base_position_value
+        
         quantity = position_value / price
         
         if action == 'buy':
@@ -699,9 +840,10 @@ class AutonomousTrader:
             side = 'SHORT'
         
         if result.get('success') or result.get('orderId'):
-            print(f"  ✅ Opened {side}: {quantity} BTC @ ${price:,.2f}")
+            print(f"  ✅ Opened {side}: {quantity:.6f} BTC @ ${price:,.2f} (sized by uncertainty)")
             self.last_trade_time = time.time()
             self.daily_trade_count += 1
+            self._total_trade_count += 1
             
             # Record trade details
             trade_record = {
@@ -722,13 +864,16 @@ class AutonomousTrader:
                 self.daily_regime_stats[regime] = {'trades': 0, 'wins': 0, 'pnl': 0.0}
             self.daily_regime_stats[regime]['trades'] += 1
             
-            self._send_alert(f"📈 <b>{side} OPENED</b>\nQty: {quantity} BTC\nPrice: ${price:,.2f}\nRegime: {regime}\nTrade: {self.daily_trade_count}/5")
+            self._send_alert(f"📈 <b>{side} OPENED</b>\nQty: {quantity:.6f} BTC\nPrice: ${price:,.2f}\nRegime: {regime}\nTrade: {self.daily_trade_count}/5")
             
-            self.self_learning.add_experience(
-                {'price': price, 'regime': self.current_regime},
-                action,
-                0
-            )
+            # Feed learning with richer state
+            self.self_learning.add_experience({
+                'price': price,
+                'regime': self.current_regime,
+                'price_history': list(self.price_history)[-20:],
+                'uncertainty': uncertainty_pred.confidence,
+                'rsi': self._calculate_rsi()
+            }, action, 0)
     
     def _manage_position(self, position: dict, current_price: float, balance: float):
         """Manage existing position."""
@@ -761,7 +906,7 @@ class AutonomousTrader:
             self._send_alert(liq_warning)
     
     def _record_trade(self, pnl_pct: float, was_winning: bool, exit_price: float = 0):
-        """Record trade for learning and daily stats."""
+        """Record trade for ALL learning modules and daily stats."""
         # Update daily stats
         if was_winning:
             self.daily_wins += 1
@@ -785,6 +930,14 @@ class AutonomousTrader:
                 self.daily_regime_stats[regime]['wins'] += 1
             self.daily_regime_stats[regime]['pnl'] += pnl_pct
         
+        # FIX: Use ORIGINAL trade action, not 'hold'/'sell' mapping
+        original_action = 'hold'
+        for trade in self.daily_trades:
+            if trade.get('status') == 'closed':
+                original_action = trade.get('action', 'hold')
+                break
+        
+        # Feed ADAPTIVE learning with per-regime performance
         self.adaptive.record_trade(
             self.current_regime,
             self.current_strategy,
@@ -792,17 +945,47 @@ class AutonomousTrader:
             was_winning
         )
         
-        self.self_learning.add_experience(
-            {'regime': self.current_regime, 'strategy': self.current_strategy},
-            'hold' if was_winning else 'sell',
-            pnl_pct
-        )
+        # Feed SELF-LEARNING with richer state including price history
+        self.self_learning.add_experience({
+            'regime': self.current_regime,
+            'strategy': self.current_strategy,
+            'price_history': list(self.price_history)[-20:],
+            'rsi': self._calculate_rsi(),
+            'was_winning': was_winning
+        }, original_action, pnl_pct)
+        
+        # Feed MODEL VALIDATOR with trade return
+        try:
+            self.model_validator.add_trade('BTCUSDT', pnl_pct)
+        except Exception as e:
+            print(f"  Model validator add_trade error: {e}")
+        
+        # Feed EVOLUTION ENGINE with trade return
+        try:
+            self.evolution_engine.record_result('default', pnl_pct)
+        except Exception as e:
+            print(f"  Evolution engine record error: {e}")
+        
+        # Feed EXPLORATION ENGINE with outcome
+        try:
+            is_exploring = self._exploration_state in ('explore', 'random')
+            self.exploration_engine.record_outcome(original_action, pnl_pct, is_exploring)
+        except Exception as e:
+            print(f"  Exploration engine record error: {e}")
+        
+        # Feed UNCERTAINTY MODEL with observed return
+        try:
+            self.uncertainty_model.add_return('BTCUSDT', pnl_pct)
+        except Exception as e:
+            print(f"  Uncertainty model add_return error: {e}")
         
         self.decision_reporter.record_trade(pnl_pct)
         
+        # Check if model should be retrained
         if self.self_learning.should_retrain():
             print("  🔄 Retraining model...")
             self.self_learning.retrain()
+            self._save_model()  # Persist after retrain
             self._send_alert(f"🧠 <b>MODEL RETRAINED</b>\nSamples: {len(self.self_learning.experience_buffer)}\nRetrains: {self.self_learning.retrain_count}")
     
     def _send_daily_report(self):
@@ -900,6 +1083,85 @@ class AutonomousTrader:
         
         self._send_alert(f"⚠️ <b>ERROR</b>\n{error[:200]}")
     
+    # ─── NEW METHODS FOR ML INTEGRATION ───
+    
+    def _collect_experience_on_bar(self, price: float, signal_data: dict, regime: str):
+        """
+        Collect learning experience on EVERY bar (every 30 seconds).
+        This ensures the model gets data even during hold periods.
+        """
+        if not self.self_learning or not self.self_learning.enabled:
+            return
+        
+        try:
+            state = {
+                'price': price,
+                'regime': regime,
+                'price_history': list(self.price_history)[-20:],
+                'rsi': self._calculate_rsi(),
+                'volatility': self._calculate_volatility() != 'LOW',
+                'volume': 0,
+                'timestamp': time.time()
+            }
+            
+            action = signal_data.get('action', 'hold')
+            # Reward is 0 for bar-level collection (real reward comes from trades)
+            self.self_learning.add_experience(state, action, 0.0)
+            
+            # Also feed uncertainty model with price return
+            if len(self.price_history) >= 2:
+                returns = [(list(self.price_history)[i+1] - list(self.price_history)[i]) / list(self.price_history)[i] 
+                           for i in range(len(list(self.price_history))-1)]
+                if returns:
+                    self.uncertainty_model.add_return('BTCUSDT', returns[-1])
+        except Exception as e:
+            # Silent fail — don't block trading loop
+            pass
+    
+    def _load_model(self):
+        """Load persisted model from disk."""
+        try:
+            os.makedirs(MODEL_DIR, exist_ok=True)
+            model_path = os.path.join(MODEL_DIR, 'self_learning_model.pkl')
+            
+            if os.path.exists(model_path):
+                with open(model_path, 'rb') as f:
+                    data = pickle.load(f)
+                
+                if hasattr(self.self_learning, 'model') and data.get('model'):
+                    self.self_learning.model = data['model']
+                    self.self_learning.retrain_count = data.get('retrain_count', 0)
+                    print(f"  📂 Loaded model from disk (retrains: {self.self_learning.retrain_count})")
+                
+                # Also load experience buffer
+                if data.get('experience_buffer'):
+                    self.self_learning.experience_buffer.extend(data['experience_buffer'])
+                    print(f"  📂 Loaded {len(data['experience_buffer'])} experiences from disk")
+            else:
+                print("  📂 No persisted model found — starting fresh")
+        except Exception as e:
+            print(f"  ⚠️ Model load error: {e}")
+    
+    def _save_model(self):
+        """Persist model to disk."""
+        try:
+            os.makedirs(MODEL_DIR, exist_ok=True)
+            model_path = os.path.join(MODEL_DIR, 'self_learning_model.pkl')
+            
+            data = {
+                'model': self.self_learning.model,
+                'retrain_count': self.self_learning.retrain_count,
+                'experience_buffer': list(self.self_learning.experience_buffer),
+                'timestamp': time.time()
+            }
+            
+            with open(model_path, 'wb') as f:
+                pickle.dump(data, f)
+            
+            print(f"  💾 Model saved to {model_path}")
+        except Exception as e:
+            print(f"  ⚠️ Model save error: {e}")
+    
     def _write_dashboard_state(self):
         """Write current state to shared file for Telegram dashboard."""
         try:
@@ -950,11 +1212,33 @@ class AutonomousTrader:
                 'signal_confidence': signal_data.get('confidence', 0),
                 'signal_ma': signal_data.get('ma_signal', 'neutral'),
                 
-                # Learning
+                # Learning (core ML)
                 'learning_samples': len(self.self_learning.experience_buffer) if self.self_learning else 0,
                 'learning_min_samples': 50,
                 'learning_retrains': self.self_learning.retrain_count if self.self_learning else 0,
                 'learning_trained': (self.self_learning.model is not None) if self.self_learning else False,
+                
+                # NEW: Exploration engine state
+                'exploration_state': self._exploration_state,
+                'exploration_epsilon': self.exploration_engine.epsilon if self.exploration_engine else 0,
+                'exploration_trades': len(self.exploration_engine._exploration_returns) if self.exploration_engine else 0,
+                'exploit_trades': len(self.exploration_engine._exploit_returns) if self.exploration_engine else 0,
+                
+                # NEW: Uncertainty model state
+                'uncertainty_confidence': 0,
+                'uncertainty_std': 0,
+                
+                # NEW: Model validator state
+                'validation_valid': self._last_validation_result.get('valid', True) if self._last_validation_result else True,
+                'validation_recommendation': self._last_validation_result.get('recommendation', 'normal') if self._last_validation_result else 'normal',
+                
+                # NEW: Evolution engine state
+                'evolution_generation': self._last_evolution_generation,
+                'evolution_best_fitness': self.evolution_engine.get_status().get('best_fitness', 0) if self.evolution_engine else 0,
+                'evolution_best_sharpe': self.evolution_engine.get_status().get('best_sharpe', 0) if self.evolution_engine else 0,
+                
+                # NEW: Ensemble state
+                'ensemble_decision_tree_trained': self.ensemble.decision_tree.is_trained if self.ensemble else False,
                 
                 # Daily stats
                 'daily_trades': self.daily_trade_count,

@@ -184,6 +184,40 @@ class SelfLearningEngine:
             'is_training': self.is_training,
             'time_to_retrain': max(0, self.retrain_interval - (time.time() - self.last_retrain_time))
         }
+    
+    def save(self, path: str):
+        """Save model and experience buffer to disk."""
+        import pickle
+        data = {
+            'model': self.model,
+            'retrain_count': self.retrain_count,
+            'experience_buffer': list(self.experience_buffer),
+            'timestamp': time.time()
+        }
+        with open(path, 'wb') as f:
+            pickle.dump(data, f)
+        logger.info(f"Model saved to {path}")
+    
+    def load(self, path: str) -> bool:
+        """Load model and experience buffer from disk."""
+        import os
+        import pickle
+        if not os.path.exists(path):
+            logger.info(f"No model file at {path}")
+            return False
+        try:
+            with open(path, 'rb') as f:
+                data = pickle.load(f)
+            if data.get('model'):
+                self.model = data['model']
+            self.retrain_count = data.get('retrain_count', 0)
+            if data.get('experience_buffer'):
+                self.experience_buffer.extend(data['experience_buffer'])
+            logger.info(f"Model loaded from {path} (retrains: {self.retrain_count}, experiences: {len(self.experience_buffer)})")
+            return True
+        except Exception as e:
+            logger.error(f"Model load error: {e}")
+            return False
 
 
 import numpy as np

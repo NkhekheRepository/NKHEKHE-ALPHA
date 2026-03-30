@@ -746,7 +746,7 @@ class CommandProcessor:
         )
 
     def cmd_intel(self, chat_id: int, text: str, bot) -> str:
-        """AI Intelligence view."""
+        """AI Intelligence view — fully integrated ML dashboard."""
         state = load_dashboard_state()
         if not state:
             return "🧠 <b>INTELLIGENCE</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n⏳ No data available."
@@ -765,11 +765,31 @@ class CommandProcessor:
         signal_conf = state.get('signal_confidence', 0)
         signal_ma = state.get('signal_ma', 'neutral')
         daily_signals = state.get('daily_signals', 0)
+        
+        # NEW: Exploration state
+        exploration_state = state.get('exploration_state', 'exploit')
+        exploration_epsilon = state.get('exploration_epsilon', 0)
+        exploration_trades = state.get('exploration_trades', 0)
+        exploit_trades = state.get('exploit_trades', 0)
+        
+        # NEW: Validation state
+        validation_valid = state.get('validation_valid', True)
+        validation_rec = state.get('validation_recommendation', 'normal')
+        
+        # NEW: Evolution state
+        evolution_gen = state.get('evolution_generation', 0)
+        evolution_fitness = state.get('evolution_best_fitness', 0)
+        evolution_sharpe = state.get('evolution_best_sharpe', 0)
+        
+        # NEW: Ensemble state
+        dt_trained = state.get('ensemble_decision_tree_trained', False)
 
         regime_emoji = {'bull': '🐂', 'bear': '🐻', 'volatile': '⚡', 'sideways': '➡️'}.get(regime, '❓')
         action_emoji = {'buy': '🟢', 'sell': '🔴', 'hold': '⏸️'}.get(signal_action, '❓')
         model_status = '✅ Trained' if is_trained else '⏳ Learning'
         sample_pct = (samples / min_samples * 100) if min_samples > 0 else 0
+        explore_emoji = '🔍' if exploration_state in ('explore', 'random') else '🎯'
+        validation_emoji = '✅' if validation_valid else '⚠️'
 
         if rsi < 30:
             rsi_sig = 'oversold (BUY)'
@@ -796,13 +816,26 @@ class CommandProcessor:
             f"└─ Volatility: {volatility}\n\n"
             f"🧠 <b>AI MODEL</b>\n"
             f"├─ Strategy: {strategy}\n"
-            f"├─ Model: {model_status}\n"
+            f"├─ Self-Learning: {model_status}\n"
+            f"├─ Decision Tree: {'✅' if dt_trained else '⏳'}\n"
             f"├─ Samples: {samples}/{min_samples} ({sample_pct:.0f}%)\n"
             f"├─ Retrains: {retrains}\n"
-            f"├─ MA Signal: {signal_ma}\n"
             f"└─ Confidence: {signal_conf:.0%}\n\n"
+            f"🔍 <b>EXPLORATION</b>\n"
+            f"├─ Mode: {explore_emoji} {exploration_state.upper()}\n"
+            f"├─ Epsilon: {exploration_epsilon:.3f}\n"
+            f"├─ Explore Trades: {exploration_trades}\n"
+            f"└─ Exploit Trades: {exploit_trades}\n\n"
+            f"🧬 <b>EVOLUTION</b>\n"
+            f"├─ Generation: {evolution_gen}\n"
+            f"├─ Best Fitness: {evolution_fitness:.4f}\n"
+            f"└─ Best Sharpe: {evolution_sharpe:.4f}\n\n"
+            f"✅ <b>VALIDATION</b>\n"
+            f"├─ Status: {validation_emoji} {'VALID' if validation_valid else 'WARNING'}\n"
+            f"└─ Recommendation: {validation_rec}\n\n"
             f"⚡ <b>SIGNAL</b>\n"
             f"├─ Action: {action_emoji} {signal_action.upper()}\n"
+            f"├─ MA Signal: {signal_ma}\n"
             f"└─ Signals Evaluated: {daily_signals}"
         )
 

@@ -13,7 +13,13 @@ from .adaptive_learning import AdaptiveLearning
 
 
 class IntelligenceEnsemble:
-    """Ensemble of ML models for trading intelligence."""
+    """Ensemble of ML models for trading intelligence.
+    
+    Supports shared instances to avoid duplicate data/learning:
+    - Pass 'shared_hmm' to use the trader's HMM instance
+    - Pass 'shared_self_learning' to use the trader's SelfLearningEngine
+    - Pass 'shared_adaptive' to use the trader's AdaptiveLearning
+    """
     
     def __init__(self, config: Dict[str, Any]):
         self.hmm_enabled = config.get('hmm', {}).get('enabled', True)
@@ -21,17 +27,24 @@ class IntelligenceEnsemble:
         self.self_learning_enabled = config.get('self_learning', {}).get('enabled', True)
         self.adaptive_enabled = config.get('adaptive', {}).get('enabled', True)
         
-        self.hmm = HMMRegimeDetector(config.get('hmm', {}))
+        # Use shared instances if provided (to avoid dual-instance problem)
+        self.hmm = config.get('shared_hmm') or HMMRegimeDetector(config.get('hmm', {}))
         self.decision_tree = DecisionTreeAgent(config.get('decision_tree', {}))
-        self.self_learning = SelfLearningEngine(config.get('self_learning', {}))
-        self.adaptive = AdaptiveLearning(config.get('adaptive', {}))
+        self.self_learning = config.get('shared_self_learning') or SelfLearningEngine(config.get('self_learning', {}))
+        self.adaptive = config.get('shared_adaptive') or AdaptiveLearning(config.get('adaptive', {}))
+        
+        self._using_shared_hmm = config.get('shared_hmm') is not None
+        self._using_shared_self_learning = config.get('shared_self_learning') is not None
         
         self.price_history: List[float] = []
         self.volume_history: List[float] = []
         
         self.current_regime = 'sideways'
         
-        logger.info("Intelligence Ensemble initialized")
+        shared_info = []
+        if self._using_shared_hmm: shared_info.append('HMM')
+        if self._using_shared_self_learning: shared_info.append('SelfLearning')
+        logger.info(f"Intelligence Ensemble initialized (shared: {', '.join(shared_info) if shared_info else 'none'})")
     
     def update(self, price: float, volume: float = 0):
         """Update all models with new data."""
