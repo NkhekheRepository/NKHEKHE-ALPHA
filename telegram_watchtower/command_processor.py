@@ -19,6 +19,25 @@ except ImportError:
 
 logger = logging.getLogger('CommandProcessor')
 
+# Shared state file for dashboard
+STATE_FILE = '/tmp/nkhekhe_dashboard_state.json'
+
+
+def _load_state() -> Optional[Dict]:
+    """Load dashboard state from shared file."""
+    try:
+        if not os.path.exists(STATE_FILE):
+            return None
+        mtime = os.path.getmtime(STATE_FILE)
+        import time
+        if time.time() - mtime > 300:
+            return None
+        with open(STATE_FILE, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 class CommandProcessor:
     def __init__(self, config: Dict):
         self.config = config
@@ -60,6 +79,14 @@ class CommandProcessor:
             '/history': self.cmd_history,
             '/trade': self.cmd_trade_status,
             '/futures': self.cmd_trade_status,
+            
+            # Dashboard commands
+            '/dashboard': self.cmd_dashboard,
+            '/dash': self.cmd_dashboard,
+            '/intel': self.cmd_intel,
+            '/portfolio': self.cmd_portfolio,
+            '/market': self.cmd_market,
+            '/risk': self.cmd_risk,
         }
         
         self.trading_engine = None
@@ -85,22 +112,22 @@ class CommandProcessor:
             return f"Unknown command: {command}\nType /help for available commands."
     
     def get_main_menu_keyboard(self):
-        """Get the main menu keyboard"""
+        """Get the unified dashboard main menu keyboard"""
         return [
+            [
+                {"text": "🤖 Portfolio", "callback_data": "dash_portfolio"},
+                {"text": "🧠 Intelligence", "callback_data": "dash_intel"},
+                {"text": "🛡️ Risk", "callback_data": "dash_risk"},
+            ],
+            [
+                {"text": "📈 Trading", "callback_data": "trading_menu"},
+                {"text": "⚙️ System", "callback_data": "system_menu"},
+                {"text": "🔔 Alerts", "callback_data": "info_alerts"},
+            ],
             [
                 {"text": "🟢 System On", "callback_data": "sys_on"},
                 {"text": "🔴 System Off", "callback_data": "sys_off"},
                 {"text": "🔄 Restart", "callback_data": "sys_restart"},
-            ],
-            [
-                {"text": "📊 Status", "callback_data": "st_quick"},
-                {"text": "📈 Metrics", "callback_data": "st_metrics"},
-                {"text": "🔔 Alerts", "callback_data": "info_alerts"},
-            ],
-            [
-                {"text": "📁 Workflows", "callback_data": "info_wf"},
-                {"text": "💻 Agents", "callback_data": "info_ag"},
-                {"text": "📄 Logs", "callback_data": "info_logs"},
             ],
             [
                 {"text": "🔒 Hide Menu", "callback_data": "hide"},
@@ -110,30 +137,28 @@ class CommandProcessor:
     def cmd_start(self, chat_id: int, text: str, bot) -> str:
         """Handle /start command - Show welcome with menu"""
         response = [
-            "🤖 *Financial Orchestrator Watch Tower*",
+            "🤖 <b>NKHEKHE ALPHA — Trading Dashboard</b>",
             "━━━━━━━━━━━━━━━━━━",
             "",
-            "✅ *System Status:* Online",
-            f"📅 *Version:* {self.config['watchtower']['version']}",
-            "🔐 *Access:* Admin Authorized",
+            "✅ System Status: Online",
+            f"📅 Version: {self.config['watchtower']['version']}",
+            "🔐 Access: Admin Authorized",
             "",
             "━━━━━━━━━━━━━━━━━━",
             "",
-            "I will notify you of system events, alerts, and workflow updates in real-time.",
+            "Use the dashboard buttons below or type commands.",
             "",
-            "*Use the menu below or type commands directly.*"
+            "📊 /dashboard  🧠 /intel  🤖 /portfolio  🛡️ /risk"
         ]
         return "\n".join(response)
-    
+
     def cmd_menu(self, chat_id: int, text: str, bot) -> str:
         """Handle /menu command - Show main menu"""
-        response = [
-            "✨ *Main Menu*",
-            "━━━━━━━━━━━━━━━━━━",
-            "",
-            "Select an option below to control and monitor your system."
-        ]
-        return "\n".join(response)
+        return (
+            "🤖 <b>NKHEKHE ALPHA DASHBOARD</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "Select a section below."
+        )
     
     def cmd_hide(self, chat_id: int, text: str, bot) -> str:
         """Handle /hide command - Hide menu"""
@@ -424,9 +449,14 @@ class CommandProcessor:
     def cmd_help(self, chat_id: int, text: str, bot) -> str:
         """Get help message"""
         response = [
-            "*Financial Orchestrator Watch Tower*\n",
-            f"Version: {self.config['watchtower']['version']}\n",
-            "*🚀 Futures Trading (75x):*\n",
+            "🤖 <b>NKHEKHE ALPHA — Bot Commands</b>\n",
+            "<b>📊 Dashboard:</b>\n",
+            "🤖 `/dashboard` - Quick dashboard summary",
+            "🧠 `/intel` - AI intelligence & regime",
+            "🤖 `/portfolio` - Portfolio & position",
+            "📊 `/market` - Market data & indicators",
+            "🛡️ `/risk` - Risk status & protection\n",
+            "<b>🚀 Futures Trading (75x):</b>\n",
             "📈 `/long [qty]` - Open LONG",
             "📉 `/short [qty]` - Open SHORT",
             "🛑 `/close` - Close position",
@@ -436,11 +466,11 @@ class CommandProcessor:
             "📈 `/signal` - Trading signal",
             "📜 `/history` - Trade history",
             "🚀 `/trade` - Trading status\n",
-            "*System Control:*\n",
+            "<b>⚙️ System Control:</b>\n",
             "🟢 `/systemon` - Start all components",
             "🔴 `/systemoff` - Stop all components",
             "📊 `/sys` - Quick status check\n",
-            "*System Info:*\n",
+            "<b>ℹ️ System Info:</b>\n",
             "📋 `/status` - Detailed status",
             "📁 `/workflows` - Active workflows",
             "💻 `/agents` - Agent statuses",
@@ -688,3 +718,246 @@ class CommandProcessor:
 ━━━━━━━━━━━━━━━━━━
 <i>Commands: /long, /short, /close, /balance, /positions</i>
 """
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # DASHBOARD COMMANDS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def cmd_dashboard(self, chat_id: int, text: str, bot) -> str:
+        """Quick dashboard summary."""
+        state = _load_state()
+        if not state:
+            return (
+                "🤖 <b>DASHBOARD</b>\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "⏳ No data available.\n"
+                "Start autonomous_trading.py to see live data."
+            )
+
+        price = state.get('price', 0)
+        regime = state.get('regime', 'unknown')
+        position_side = state.get('position_side', 'FLAT')
+        pnl_pct = state.get('position_pnl_pct', 0)
+        balance = state.get('balance', 0)
+        daily_trades = state.get('daily_trades', 0)
+        max_trades = state.get('daily_max_trades', 5)
+        signal_action = state.get('signal_action', 'hold')
+        signal_conf = state.get('signal_confidence', 0)
+        uptime = self._format_uptime(state.get('uptime', 0))
+
+        regime_emoji = {'bull': '🐂', 'bear': '🐻', 'volatile': '⚡', 'sideways': '➡️'}.get(regime, '❓')
+        action_emoji = {'buy': '🟢', 'sell': '🔴', 'hold': '⏸️'}.get(signal_action, '❓')
+        side_emoji = '📈' if position_side == 'LONG' else '📉' if position_side == 'SHORT' else '➡️'
+        pnl_emoji = '🟢' if pnl_pct > 0 else '🔴' if pnl_pct < 0 else '⚪'
+
+        return (
+            f"🤖 <b>QUICK DASHBOARD</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"⏱ {uptime}  |  💰 ${balance:,.2f}\n\n"
+            f"📊 Market: ${price:,.2f} | {regime_emoji} {regime.upper()}\n"
+            f"📡 Signal: {action_emoji} {signal_action.upper()} ({signal_conf:.0%})\n"
+            f"💼 Position: {side_emoji} {position_side} | PnL: {pnl_emoji} {pnl_pct:+.2f}%\n"
+            f"📋 Trades: {daily_trades}/{max_trades}\n\n"
+            f"<i>Use /intel /portfolio /market /risk for details</i>"
+        )
+
+    def cmd_intel(self, chat_id: int, text: str, bot) -> str:
+        """AI Intelligence view."""
+        state = _load_state()
+        if not state:
+            return "🧠 <b>INTELLIGENCE</b>\n━━━━━━━━━━━━━━━━━━\n⏳ No data available."
+
+        price = state.get('price', 0)
+        regime = state.get('regime', 'unknown')
+        strategy = state.get('strategy', 'unknown')
+        rsi = state.get('rsi', 50)
+        volatility = state.get('volatility', 'N/A')
+        trend = state.get('trend', 'N/A')
+        samples = state.get('learning_samples', 0)
+        min_samples = state.get('learning_min_samples', 50)
+        retrains = state.get('learning_retrains', 0)
+        is_trained = state.get('learning_trained', False)
+        signal_action = state.get('signal_action', 'hold')
+        signal_conf = state.get('signal_confidence', 0)
+        signal_ma = state.get('signal_ma', 'neutral')
+        daily_signals = state.get('daily_signals', 0)
+
+        regime_emoji = {'bull': '🐂', 'bear': '🐻', 'volatile': '⚡', 'sideways': '➡️'}.get(regime, '❓')
+        action_emoji = {'buy': '🟢', 'sell': '🔴', 'hold': '⏸️'}.get(signal_action, '❓')
+        model_status = '✅ Trained' if is_trained else '⏳ Learning'
+        sample_pct = (samples / min_samples * 100) if min_samples > 0 else 0
+
+        if rsi < 30:
+            rsi_sig = 'oversold (BUY)'
+        elif rsi > 70:
+            rsi_sig = 'overbought (SELL)'
+        else:
+            rsi_sig = 'neutral'
+
+        regime_desc = {
+            'bull': 'bullish trend detected',
+            'bear': 'bearish trend detected',
+            'volatile': 'high volatility',
+            'sideways': 'stable market'
+        }.get(regime, 'unknown')
+
+        return (
+            f"🧠 <b>AI INTELLIGENCE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"📊 <b>MARKET</b>\n"
+            f"├─ Price: ${price:,.2f}\n"
+            f"├─ Regime: {regime_emoji} {regime.upper()} — {regime_desc}\n"
+            f"├─ Trend: {trend}\n"
+            f"├─ RSI: {rsi:.1f} ({rsi_sig})\n"
+            f"└─ Volatility: {volatility}\n\n"
+            f"🧠 <b>AI MODEL</b>\n"
+            f"├─ Strategy: {strategy}\n"
+            f"├─ Model: {model_status}\n"
+            f"├─ Samples: {samples}/{min_samples} ({sample_pct:.0f}%)\n"
+            f"├─ Retrains: {retrains}\n"
+            f"├─ MA Signal: {signal_ma}\n"
+            f"└─ Confidence: {signal_conf:.0%}\n\n"
+            f"⚡ <b>SIGNAL</b>\n"
+            f"├─ Action: {action_emoji} {signal_action.upper()}\n"
+            f"└─ Signals Evaluated: {daily_signals}"
+        )
+
+    def cmd_portfolio(self, chat_id: int, text: str, bot) -> str:
+        """Portfolio view."""
+        state = _load_state()
+        if not state:
+            return "🤖 <b>PORTFOLIO</b>\n━━━━━━━━━━━━━━━━━━\n⏳ No data available."
+
+        position_side = state.get('position_side', 'FLAT')
+        amount = state.get('position_amount', 0)
+        entry = state.get('position_entry', 0)
+        price = state.get('price', 0)
+        pnl = state.get('position_pnl', 0)
+        pnl_pct = state.get('position_pnl_pct', 0)
+        balance = state.get('balance', 0)
+        leverage = state.get('leverage', 75)
+        daily_wins = state.get('daily_wins', 0)
+        daily_losses = state.get('daily_losses', 0)
+        win_rate = state.get('daily_win_rate', 0)
+        daily_trades = state.get('daily_trades', 0)
+        max_trades = state.get('daily_max_trades', 5)
+        testnet = state.get('testnet', True)
+        signal_action = state.get('signal_action', 'hold')
+        signal_conf = state.get('signal_confidence', 0)
+
+        side_emoji = '📈' if position_side == 'LONG' else '📉' if position_side == 'SHORT' else '➡️'
+        pnl_emoji = '🟢' if pnl_pct > 0 else '🔴' if pnl_pct < 0 else '⚪'
+        testnet_label = 'TESTNET' if testnet else 'LIVE'
+        action_emoji = {'buy': '🟢', 'sell': '🔴', 'hold': '⏸️'}.get(signal_action, '❓')
+        pos_size_usd = amount * price
+
+        return (
+            f"🤖 <b>PORTFOLIO DASHBOARD</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"⏱ {testnet_label}\n\n"
+            f"📊 <b>POSITION</b>\n"
+            f"├─ Side: {side_emoji} {position_side}\n"
+            f"├─ Size: {amount:.4f} BTC (${pos_size_usd:,.2f})\n"
+            f"├─ Entry: ${entry:,.2f}\n"
+            f"├─ Current: ${price:,.2f}\n"
+            f"└─ PnL: {pnl_emoji} ${pnl:.2f} ({pnl_pct:+.2f}%)\n\n"
+            f"💰 <b>ACCOUNT</b>\n"
+            f"├─ Balance: ${balance:,.2f}\n"
+            f"├─ Leverage: {leverage}x\n"
+            f"├─ Daily PnL: {pnl_pct:+.2f}%\n"
+            f"├─ Win Rate: {win_rate:.1f}% ({daily_wins}W/{daily_losses}L)\n"
+            f"└─ Trades: {daily_trades}/{max_trades}\n\n"
+            f"📈 <b>SIGNAL</b>\n"
+            f"├─ {action_emoji} {signal_action.upper()} ({signal_conf:.0%})"
+        )
+
+    def cmd_market(self, chat_id: int, text: str, bot) -> str:
+        """Market data view."""
+        state = _load_state()
+        if not state:
+            return "📊 <b>MARKET DATA</b>\n━━━━━━━━━━━━━━━━━━\n⏳ No data available."
+
+        price = state.get('price', 0)
+        regime = state.get('regime', 'unknown')
+        rsi = state.get('rsi', 50)
+        volatility = state.get('volatility', 'N/A')
+        trend = state.get('trend', 'N/A')
+        signal_action = state.get('signal_action', 'hold')
+        signal_conf = state.get('signal_confidence', 0)
+        signal_ma = state.get('signal_ma', 'neutral')
+
+        regime_emoji = {'bull': '🐂', 'bear': '🐻', 'volatile': '⚡', 'sideways': '➡️'}.get(regime, '❓')
+        action_emoji = {'buy': '🟢', 'sell': '🔴', 'hold': '⏸️'}.get(signal_action, '❓')
+
+        if rsi < 30:
+            rsi_sig = 'oversold (BUY)'
+        elif rsi > 70:
+            rsi_sig = 'overbought (SELL)'
+        else:
+            rsi_sig = 'neutral'
+
+        return (
+            f"📊 <b>MARKET DATA</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"💰 <b>PRICE</b>\n"
+            f"├─ Current: ${price:,.2f}\n"
+            f"├─ Regime: {regime_emoji} {regime.upper()}\n"
+            f"├─ Trend: {trend}\n"
+            f"└─ Volatility: {volatility}\n\n"
+            f"📈 <b>INDICATORS</b>\n"
+            f"├─ RSI: {rsi:.1f} ({rsi_sig})\n"
+            f"├─ MA Cross: {signal_ma}\n\n"
+            f"📡 <b>SIGNAL</b>\n"
+            f"├─ Action: {action_emoji} {signal_action.upper()}\n"
+            f"└─ Confidence: {signal_conf:.0%}"
+        )
+
+    def cmd_risk(self, chat_id: int, text: str, bot) -> str:
+        """Risk status view."""
+        state = _load_state()
+        if not state:
+            return "🛡️ <b>RISK STATUS</b>\n━━━━━━━━━━━━━━━━━━\n⏳ No data available."
+
+        daily_trades = state.get('daily_trades', 0)
+        max_trades = state.get('daily_max_trades', 5)
+        stop_loss = state.get('stop_loss_pct', 0.02) * 100
+        take_profit = state.get('take_profit_pct', 0.05) * 100
+        circuit_ok = state.get('circuit_breaker_ok', True)
+        balance = state.get('balance', 0)
+        position_amt = state.get('position_amount', 0)
+        price = state.get('price', 0)
+        pnl_pct = state.get('position_pnl_pct', 0)
+        daily_wins = state.get('daily_wins', 0)
+        daily_losses = state.get('daily_losses', 0)
+        leverage = state.get('leverage', 75)
+
+        if daily_trades >= max_trades:
+            risk_level = '🔴 HIGH (limit reached)'
+        elif pnl_pct < -1.5 or not circuit_ok:
+            risk_level = '🟡 MEDIUM'
+        else:
+            risk_level = '🟢 LOW'
+
+        exposed_usd = position_amt * price
+        exposed_pct = (exposed_usd / balance * 100) if balance > 0 else 0
+        circuit_label = '✅ CLOSED' if circuit_ok else '❌ OPEN'
+        trade_limit_status = '🔴 STOPPED' if daily_trades >= max_trades else '🟢 ACTIVE'
+
+        return (
+            f"🛡️ <b>RISK STATUS</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"📋 <b>DAILY LIMITS</b>\n"
+            f"├─ Trades: {daily_trades}/{max_trades}\n"
+            f"├─ Status: {trade_limit_status}\n"
+            f"├─ Wins: {daily_wins}  |  Losses: {daily_losses}\n"
+            f"└─ Daily PnL: {pnl_pct:+.2f}%\n\n"
+            f"⚙️ <b>PROTECTION</b>\n"
+            f"├─ Stop Loss: -{stop_loss:.1f}%\n"
+            f"├─ Take Profit: +{take_profit:.1f}%\n"
+            f"├─ Circuit Breaker: {circuit_label}\n"
+            f"└─ Risk Level: {risk_level}\n\n"
+            f"📊 <b>EXPOSURE</b>\n"
+            f"├─ Position: ${exposed_usd:,.2f} ({exposed_pct:.2f}% of balance)\n"
+            f"├─ Leverage: {leverage}x\n"
+            f"└─ Current PnL: {pnl_pct:+.2f}%"
+        )

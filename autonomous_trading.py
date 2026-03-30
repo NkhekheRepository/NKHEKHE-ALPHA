@@ -587,6 +587,9 @@ class AutonomousTrader:
             
             if self._should_trade(action, confidence, balance, regime):
                 self._open_position(action, balance, regime)
+        
+        # Write dashboard state for Telegram
+        self._write_dashboard_state()
     
     def _detect_regime(self, price: float) -> str:
         """Detect market regime using HMM."""
@@ -896,6 +899,83 @@ class AutonomousTrader:
             print("  🔌 Circuit breaker recorded failure")
         
         self._send_alert(f"⚠️ <b>ERROR</b>\n{error[:200]}")
+    
+    def _write_dashboard_state(self):
+        """Write current state to shared file for Telegram dashboard."""
+        try:
+            import json
+            status = self.trading_engine.get_status() if self.trading_engine else {}
+            position = status.get('position', {})
+            price = status.get('price', 0)
+            balance = status.get('balance', 0)
+            
+            position_amt = position.get('amount', 0) if position else 0
+            entry_price = position.get('entry_price', 0) if position else 0
+            current_pnl = position.get('unrealized_pnl', 0) if position else 0
+            pnl_pct = ((price - entry_price) / entry_price * 100) if entry_price > 0 else 0
+            
+            total_trades = self.daily_wins + self.daily_losses
+            win_rate = (self.daily_wins / total_trades * 100) if total_trades > 0 else 0
+            
+            # Generate current signal
+            signal_data = self._generate_signal(price) if price > 0 else {'action': 'hold', 'confidence': 0}
+            
+            state = {
+                'timestamp': datetime.now().isoformat(),
+                'running': self.running,
+                'uptime': time.time() - self.start_time,
+                
+                # Market
+                'price': price,
+                'regime': self.current_regime,
+                'strategy': self.current_strategy,
+                'rsi': self._calculate_rsi(),
+                'volatility': self._calculate_volatility(),
+                'trend': self._calculate_trend(),
+                
+                # Position
+                'position_side': 'LONG' if position_amt > 0 else 'SHORT' if position_amt < 0 else 'FLAT',
+                'position_amount': abs(position_amt),
+                'position_entry': entry_price,
+                'position_pnl': current_pnl,
+                'position_pnl_pct': pnl_pct,
+                
+                # Account
+                'balance': balance,
+                'leverage': status.get('leverage', 75),
+                'testnet': status.get('testnet', True),
+                
+                # Signal
+                'signal_action': signal_data.get('action', 'hold'),
+                'signal_confidence': signal_data.get('confidence', 0),
+                'signal_ma': signal_data.get('ma_signal', 'neutral'),
+                
+                # Learning
+                'learning_samples': len(self.self_learning.experience_buffer) if self.self_learning else 0,
+                'learning_min_samples': 50,
+                'learning_retrains': self.self_learning.retrain_count if self.self_learning else 0,
+                'learning_trained': (self.self_learning.model is not None) if self.self_learning else False,
+                
+                # Daily stats
+                'daily_trades': self.daily_trade_count,
+                'daily_max_trades': self.max_daily_trades,
+                'daily_wins': self.daily_wins,
+                'daily_losses': self.daily_losses,
+                'daily_win_rate': win_rate,
+                'daily_signals': len(self.daily_signals),
+                'daily_regime_stats': self.daily_regime_stats,
+                
+                # Risk
+                'stop_loss_pct': self.stop_loss_pct,
+                'take_profit_pct': self.take_profit_pct,
+                'circuit_breaker_ok': self.circuit_breaker.check_order_allowed() if self.circuit_breaker else True,
+            }
+            
+            state_path = '/tmp/nkhekhe_dashboard_state.json'
+            with open(state_path, 'w') as f:
+                json.dump(state, f, indent=2, default=str)
+        except Exception as e:
+            print(f"Dashboard state write error: {e}")
     
     def stop(self):
         self.running = False
