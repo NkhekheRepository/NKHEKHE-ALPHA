@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     wget \
+    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 COPY vnpy_repo /vnpy/vnpy_repo
@@ -47,7 +48,8 @@ RUN pip install --no-cache-dir \
     prometheus-client>=0.21.0 \
     python-telegram-bot>=21.0 \
     sqlalchemy>=2.0.0 \
-    aiosqlite>=0.19.0
+    aiosqlite>=0.19.0 \
+    psutil>=5.9.0
 
 ENV PYTHONPATH=/vnpy
 ENV PYTHONUNBUFFERED=1
@@ -55,7 +57,8 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000 5001 8000
 
 COPY vnpy_engine/entrypoint.sh /entrypoint.sh
+COPY vnpy_engine/supervisord.conf /etc/supervisor/conf.d/vnpy.conf
 COPY vnpy_engine/prometheus.yml /etc/prometheus/prometheus.yml
 RUN chmod +x /entrypoint.sh
 
-CMD ["/entrypoint.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/vnpy.conf"]

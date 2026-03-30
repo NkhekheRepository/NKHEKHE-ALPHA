@@ -2,6 +2,7 @@
   "strategies": [
     {
       "name": "RL_Strategy",
+      "type": "rl",
       "symbol": "BTCUSDT",
       "enabled": true,
       "mode": "paper",
@@ -13,25 +14,59 @@
       }
     },
     {
-      "name": "Momentum_Strategy",
-      "symbol": "ETHUSDT",
-      "enabled": false,
+      "name": "Momentum_CTA",
+      "type": "cta",
+      "class": "MomentumCtaStrategy",
+      "symbol": "BTCUSDT",
+      "vt_symbol": "BTCUSDT.BINANCE",
+      "enabled": true,
       "mode": "paper",
       "parameters": {
-        "fast_period": 10,
-        "slow_period": 30,
-        "risk_threshold": 0.15
+        "fast_window": 10,
+        "slow_window": 30,
+        "fixed_size": 1
       }
     },
     {
-      "name": "MeanReversion",
-      "symbol": "BNBUSDT",
+      "name": "MeanReversion_CTA",
+      "type": "cta",
+      "class": "MeanReversionCtaStrategy",
+      "symbol": "ETHUSDT",
+      "vt_symbol": "ETHUSDT.BINANCE",
       "enabled": false,
       "mode": "paper",
       "parameters": {
-        "lookback_period": 20,
-        "entry_threshold": 2.0,
-        "exit_threshold": 0.5
+        "boll_window": 20,
+        "boll_dev": 2.0,
+        "fixed_size": 1
+      }
+    },
+    {
+      "name": "Breakout_CTA",
+      "type": "cta",
+      "class": "BreakoutCtaStrategy",
+      "symbol": "BNBUSDT",
+      "vt_symbol": "BNBUSDT.BINANCE",
+      "enabled": false,
+      "mode": "paper",
+      "parameters": {
+        "lookback_window": 20,
+        "fixed_size": 1
+      }
+    },
+    {
+      "name": "RL_Enhanced_CTA",
+      "type": "cta_rl",
+      "class": "RlEnhancedCtaStrategy",
+      "symbol": "BTCUSDT",
+      "vt_symbol": "BTCUSDT.BINANCE",
+      "enabled": false,
+      "mode": "paper",
+      "parameters": {
+        "fast_window": 10,
+        "slow_window": 30,
+        "fixed_size": 1,
+        "rl_enabled": true
       }
     }
   ],
@@ -41,5 +76,9 @@
       "mode": "paper",
       "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
     }
+  },
+  "cta_settings": {
+    "engine_type": "live",
+    "backtest_mode": false
   }
 }
