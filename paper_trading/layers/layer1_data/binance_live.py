@@ -25,7 +25,7 @@ BINANCE_API_URL = "https://api.binance.com/api/v3"
 class BinanceLiveClient:
     def __init__(self, api_key: str = None, api_secret: str = None, testnet: bool = False):
         self.api_key = api_key or os.getenv("BINANCE_API_KEY", "")
-        self.api_secret = api_secret or os.getenv("BINANCE_API_SECRET", "")
+        self.api_secret = api_secret or os.getenv("BINANCE_SECRET_KEY", "") or os.getenv("BINANCE_API_SECRET", "")
         self.testnet = testnet
         
         if testnet:
@@ -306,10 +306,10 @@ class BinanceLiveClient:
             return []
     
     def get_symbol_price(self, symbol: str) -> float:
-        """Get current price for symbol."""
+        """Get current price for symbol - no auth required."""
         try:
             response = requests.get(
-                f"{BINANCE_API_URL}/symbol/ticker/price",
+                f"{BINANCE_API_URL}/ticker/price",
                 params={"symbol": symbol.upper()},
                 timeout=10
             )
