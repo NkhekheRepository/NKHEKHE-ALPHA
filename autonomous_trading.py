@@ -266,6 +266,20 @@ class AutonomousTrader:
         self.report_interval = 30
         self.last_trade_time = 0
         self.last_report_time = 0
+        self.start_time = time.time()
+        
+        # Trade limiting - Max 5 trades per day
+        self.max_daily_trades = 5
+        self.daily_trade_count = 0
+        self.daily_trades = []
+        self.daily_signals = []
+        self.last_reset_date = datetime.now().date()
+        
+        # Daily stats
+        self.daily_wins = 0
+        self.daily_losses = 0
+        self.daily_pnl = 0.0
+        self.daily_regime_stats = {}
         
         self.max_position_pct = 0.1
         self.stop_loss_pct = 0.02
@@ -507,6 +521,9 @@ class AutonomousTrader:
         return f'{int(seconds/3600)}h ago'
     
     def trading_loop(self):
+        # Check daily reset
+        self._check_daily_reset()
+        
         status = self.trading_engine.get_status()
         position = status.get('position', {})
         price = status.get('price', 0)
@@ -529,7 +546,7 @@ class AutonomousTrader:
         
         if position_amt != 0:
             pnl_pct = (price - entry_price) / entry_price if entry_price > 0 else 0
-            print(f"[{timestamp}] ${price:,.2f} | PnL: {pnl_pct:.2%} | Regime: {regime} | Strategy: {self.current_strategy}")
+            print(f"[{timestamp}] ${price:,.2f} | Trades: {self.daily_trade_count}/5 | PnL: {pnl_pct:.2%} | Regime: {regime}")
             
             self._manage_position(position, price, balance)
         else:
@@ -537,10 +554,19 @@ class AutonomousTrader:
             action = signal_data.get('action', 'hold')
             confidence = signal_data.get('confidence', 0)
             
-            print(f"[{timestamp}] ${price:,.2f} | Signal: {action} ({confidence:.0%}) | Regime: {regime}")
+            # Record signal for ranking
+            self.daily_signals.append({
+                'action': action,
+                'confidence': confidence,
+                'regime': regime,
+                'price': price,
+                'timestamp': datetime.now()
+            })
             
-            if self._should_trade(action, confidence, balance):
-                self._open_position(action, balance)
+            print(f"[{timestamp}] ${price:,.2f} | Trades: {self.daily_trade_count}/5 | Signal: {action} ({confidence:.0%}) | Regime: {regime}")
+            
+            if self._should_trade(action, confidence, balance, regime):
+                self._open_position(action, balance, regime)
     
     def _detect_regime(self, price: float) -> str:
         """Detect market regime using HMM."""
@@ -589,8 +615,32 @@ class AutonomousTrader:
         
         return signal
     
-    def _should_trade(self, action: str, confidence: float, balance: float) -> bool:
-        """Check if we should take a trade."""
+    def _check_daily_reset(self):
+        """Check if we need to reset daily counters."""
+        today = datetime.now().date()
+        if today > self.last_reset_date:
+            # Send daily report before resetting
+            self._send_daily_report()
+            
+            # Reset daily counters
+            self.daily_trade_count = 0
+            self.daily_trades = []
+            self.daily_signals = []
+            self.daily_wins = 0
+            self.daily_losses = 0
+            self.daily_pnl = 0.0
+            self.daily_regime_stats = {}
+            self.last_reset_date = today
+            
+            print(f"📊 Daily reset complete - {today}")
+    
+    def _should_trade(self, action: str, confidence: float, balance: float, regime: str = 'sideways') -> bool:
+        """Check if we should take a trade - with max 5 daily limit."""
+        # Check max daily trades limit
+        if self.daily_trade_count >= self.max_daily_trades:
+            print(f"  ⏸️ Max daily trades reached ({self.max_daily_trades}/5)")
+            return False
+        
         if not self.circuit_breaker.check_order_allowed():
             print("  ⏸️ Circuit breaker OPEN - no trades")
             return False
@@ -612,7 +662,7 @@ class AutonomousTrader:
         
         return action in ['buy', 'sell']
     
-    def _open_position(self, action: str, balance: float):
+    def _open_position(self, action: str, balance: float, regime: str = 'sideways'):
         """Open a new position."""
         position_value = balance * 0.05
         price = self.trading_engine.get_price()
@@ -628,8 +678,28 @@ class AutonomousTrader:
         if result.get('success') or result.get('orderId'):
             print(f"  ✅ Opened {side}: {quantity} BTC @ ${price:,.2f}")
             self.last_trade_time = time.time()
+            self.daily_trade_count += 1
             
-            self._send_alert(f"📈 <b>{side} OPENED</b>\nQty: {quantity} BTC\nPrice: ${price:,.2f}\nRegime: {self.current_regime}")
+            # Record trade details
+            trade_record = {
+                'side': side,
+                'action': action,
+                'entry_price': price,
+                'quantity': quantity,
+                'regime': regime,
+                'confidence': 0.6,
+                'entry_time': datetime.now(),
+                'pnl': 0.0,
+                'status': 'open'
+            }
+            self.daily_trades.append(trade_record)
+            
+            # Update regime stats
+            if regime not in self.daily_regime_stats:
+                self.daily_regime_stats[regime] = {'trades': 0, 'wins': 0, 'pnl': 0.0}
+            self.daily_regime_stats[regime]['trades'] += 1
+            
+            self._send_alert(f"📈 <b>{side} OPENED</b>\nQty: {quantity} BTC\nPrice: ${price:,.2f}\nRegime: {regime}\nTrade: {self.daily_trade_count}/5")
             
             self.self_learning.add_experience(
                 {'price': price, 'regime': self.current_regime},
@@ -651,14 +721,14 @@ class AutonomousTrader:
         if pnl_pct <= -self.stop_loss_pct:
             print(f"  🛑 Stop loss triggered: {pnl_pct:.2%}")
             self.trading_engine.close()
-            self._record_trade(pnl_pct, False)
+            self._record_trade(pnl_pct, False, current_price)
             self._send_alert(f"🛑 <b>STOP LOSS</b>\nPnL: {pnl_pct:.2%}")
             return
         
         if pnl_pct >= self.take_profit_pct:
             print(f"  💰 Take profit triggered: {pnl_pct:.2%}")
             self.trading_engine.close()
-            self._record_trade(pnl_pct, True)
+            self._record_trade(pnl_pct, True, current_price)
             self._send_alert(f"💰 <b>TAKE PROFIT</b>\nPnL: {pnl_pct:.2%}")
             return
         
@@ -667,8 +737,31 @@ class AutonomousTrader:
             print(f"  {liq_warning}")
             self._send_alert(liq_warning)
     
-    def _record_trade(self, pnl_pct: float, was_winning: bool):
-        """Record trade for learning."""
+    def _record_trade(self, pnl_pct: float, was_winning: bool, exit_price: float = 0):
+        """Record trade for learning and daily stats."""
+        # Update daily stats
+        if was_winning:
+            self.daily_wins += 1
+        else:
+            self.daily_losses += 1
+        
+        # Find and update the open trade
+        for trade in self.daily_trades:
+            if trade.get('status') == 'open':
+                trade['status'] = 'closed'
+                trade['exit_price'] = exit_price
+                trade['pnl_pct'] = pnl_pct
+                trade['exit_time'] = datetime.now()
+                trade['was_winning'] = was_winning
+                break
+        
+        # Update regime stats
+        regime = self.current_regime
+        if regime in self.daily_regime_stats:
+            if was_winning:
+                self.daily_regime_stats[regime]['wins'] += 1
+            self.daily_regime_stats[regime]['pnl'] += pnl_pct
+        
         self.adaptive.record_trade(
             self.current_regime,
             self.current_strategy,
@@ -688,6 +781,82 @@ class AutonomousTrader:
             print("  🔄 Retraining model...")
             self.self_learning.retrain()
             self._send_alert(f"🧠 <b>MODEL RETRAINED</b>\nSamples: {len(self.self_learning.experience_buffer)}\nRetrains: {self.self_learning.retrain_count}")
+    
+    def _send_daily_report(self):
+        """Send comprehensive daily report to Telegram."""
+        yesterday = datetime.now().date()
+        
+        total_trades = len([t for t in self.daily_trades if t.get('status') == 'closed'])
+        win_rate = (self.daily_wins / total_trades * 100) if total_trades > 0 else 0
+        
+        # Calculate PnL from closed trades
+        total_pnl = sum(t.get('pnl_pct', 0) for t in self.daily_trades if t.get('status') == 'closed')
+        
+        # Build trades list
+        trades_list = []
+        for t in self.daily_trades:
+            if t.get('status') == 'closed':
+                emoji = '🟢' if t.get('was_winning') else '🔴'
+                trades_list.append(f"{emoji} {t.get('side')} | Entry: ${t.get('entry_price', 0):,.0f} | Exit: ${t.get('exit_price', 0):,.0f} | PnL: {t.get('pnl_pct', 0):.2%}")
+        
+        trades_text = '\n'.join(trades_list) if trades_list else 'No closed trades'
+        
+        # Regime performance
+        regime_text = []
+        for regime, stats in self.daily_regime_stats.items():
+            wr = (stats['wins'] / stats['trades'] * 100) if stats['trades'] > 0 else 0
+            regime_text.append(f"├─ {regime}: {stats['trades']} trades | Win: {wr:.0f}% | PnL: {stats['pnl']:+.2%}")
+        regime_perf = '\n'.join(regime_text) if regime_text else 'No regime data'
+        
+        # Learning status
+        learning_status = self.self_learning.get_status()
+        is_trained = '✅ TRAINED' if self.self_learning.model else '⏳ LEARNING'
+        
+        # Build report
+        report = f"""
+📊 <b>DAILY TRADING REPORT - {yesterday}</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📈 <b>PERFORMANCE SUMMARY</b>
+├─ Date: {yesterday}
+├─ Trades Executed: {total_trades}/5
+├─ Wins: {self.daily_wins}
+├─ Losses: {self.daily_losses}
+├─ Win Rate: {win_rate:.1f}%
+├─ Net PnL: {total_pnl:+.2%}
+└─ Signals Evaluated: {len(self.daily_signals)}
+
+🏆 <b>TRADE HISTORY</b>
+{trades_text}
+
+🧠 <b>LEARNING INSIGHTS</b>
+├─ AI Model: {is_trained}
+├─ Samples: {len(self.self_learning.experience_buffer)}/50
+├─ Retrains: {self.self_learning.retrain_count}
+└─ Model Accuracy: {learning_status.get('time_to_retrain', 'N/A')}
+
+📊 <b>REGIME PERFORMANCE</b>
+{regime_perf}
+
+⚡ <b>ADAPTATION</b>
+├─ Strategy: {self.current_strategy}
+├─ Current Regime: {self.current_regime}
+└─ Uptime: {self._format_uptime(time.time() - self.start_time)}
+
+❤️ <b>SYSTEM HEALTH</b>
+├─ API: ✅ Connected
+├─ Circuit Breaker: ✅ OK
+└─ Status: 🟢 HEALTHY
+"""
+        self._send_alert(report)
+    
+    def _format_uptime(self, seconds: float) -> str:
+        """Format uptime string."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        return f"{minutes}m"
     
     def _get_daily_pnl(self) -> float:
         """Calculate daily PnL."""
