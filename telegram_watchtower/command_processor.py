@@ -41,6 +41,8 @@ class CommandProcessor:
             '/m': self.cmd_metrics,
             '/alerts': self.cmd_alerts,
             '/a': self.cmd_alerts,
+            '/data': self.cmd_data,
+            '/d': self.cmd_data,
             '/systemon': self.cmd_system_on,
             '/systemoff': self.cmd_system_off,
             '/sys': self.cmd_quick_status,
@@ -268,6 +270,45 @@ class CommandProcessor:
         
         return "\n".join(response)
     
+    def cmd_data(self, chat_id: int, text: str, bot) -> str:
+        """Get data ingestion summary"""
+        response = ["*Data Lab Status*\n"]
+        
+        try:
+            from data_lab import get_stream_manager
+            from data_lab.storage import get_duckdb_manager
+            
+            stream_manager = get_stream_manager()
+            stream_info = stream_manager.get_all_stream_info()
+            
+            response.append("*Redis Streams:*")
+            for stream_name, info in stream_info.items():
+                utilization = info.get('utilization_percent', 0)
+                emoji = "🟢" if utilization < 80 else "🟡" if utilization < 95 else "🔴"
+                response.append(
+                    f"  {emoji} {stream_name}: {info.get('length', 0)}/{info.get('max_length', 0)} "
+                    f"({utilization:.1f}%)"
+                )
+            
+            db = get_duckdb_manager()
+            db_stats = db.get_stats()
+            
+            response.append(f"\n*DuckDB Storage:*")
+            response.append(f"  📊 Ticks: {db_stats.get('tick_count', 0):,}")
+            response.append(f"  📊 Klines: {db_stats.get('kline_count', 0):,}")
+            response.append(f"  💾 Size: {db_stats.get('file_size_mb', 0):.1f} MB")
+            
+            symbols = db_stats.get('tracked_symbols', [])
+            if symbols:
+                response.append(f"  📈 Symbols: {', '.join(symbols[:5])}")
+                if len(symbols) > 5:
+                    response.append(f"     +{len(symbols) - 5} more")
+                    
+        except Exception as e:
+            response.append(f"\n⚠️ Error loading data stats: {e}")
+        
+        return "\n".join(response)
+    
     def cmd_system_on(self, chat_id: int, text: str, bot) -> str:
         """Start the entire system"""
         logger.info(f"System start requested by chat_id={chat_id}")
@@ -379,8 +420,9 @@ class CommandProcessor:
             "📄 `/logs` - Recent logs",
             "📡 `/metrics` - System metrics",
             "🔔 `/alerts` - Recent alerts",
+            "📊 `/data` - Data ingestion summary",
             "📖 `/help` - Show this help\n",
-            "*Shortcuts:* `/s`, `/wf`, `/ag`, `/m`, `/a`, `/h`"
+            "*Shortcuts:* `/s`, `/wf`, `/ag`, `/m`, `/a`, `/d`, `/h`"
         ]
         
         return "\n".join(response)

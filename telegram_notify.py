@@ -38,7 +38,7 @@ def get_bot_token() -> str:
     config = load_config()
     return config.get('telegram', {}).get('bot_token', '')
 
-def send_message(chat_id: int, text: str, parse_mode: str = 'Markdown') -> bool:
+def send_message(chat_id: int, text: str, parse_mode: str = None) -> bool:
     """Send a message to a Telegram chat"""
     bot_token = get_bot_token()
     
@@ -53,7 +53,9 @@ def send_message(chat_id: int, text: str, parse_mode: str = 'Markdown') -> bool:
     try:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         safe_text = text.encode('utf-8', errors='replace').decode('utf-8')
-        data = {'chat_id': chat_id, 'text': safe_text, 'parse_mode': parse_mode}
+        data = {'chat_id': chat_id, 'text': safe_text}
+        if parse_mode:
+            data['parse_mode'] = parse_mode
         response = requests.post(url, data=data, timeout=10)
         
         if response.status_code == 200:
@@ -66,7 +68,7 @@ def send_message(chat_id: int, text: str, parse_mode: str = 'Markdown') -> bool:
         logger.error(f"Failed to send message: {e}")
         return False
 
-def send_to_admin(message: str, parse_mode: str = 'Markdown') -> bool:
+def send_to_admin(message: str, parse_mode: str = None) -> bool:
     """Send message to admin (chat_id 7361240735)"""
     return send_message(ADMIN_CHAT_ID, message, parse_mode)
 

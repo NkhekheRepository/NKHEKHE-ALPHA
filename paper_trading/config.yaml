@@ -1,0 +1,142 @@
+# Paper Trading Configuration
+# Autonomous Quant Trading System
+
+trading:
+  # Initial capital in USD
+  initial_capital: 10000
+  
+  # Leverage factor (1 = no leverage, 75 = 75x)
+  leverage: 75
+  
+  # Trading pairs
+  symbols: 
+    - BTCUSDT
+  
+  # Update interval in seconds
+  update_interval: 5
+  
+  # Trading mode: paper | live
+  mode: paper
+  
+  # Enable/disable trading
+  enabled: true
+
+risk:
+  # Maximum daily loss as percentage
+  max_daily_loss_pct: 5
+  
+  # Maximum drawdown as percentage
+  max_drawdown_pct: 20
+  
+  # Position size as percentage of capital
+  position_size_pct: 10
+  
+  # Stop loss as percentage
+  stop_loss_pct: 2
+  
+  # Take profit as percentage
+  take_profit_pct: 5
+
+strategies:
+  - name: "RL_Enhanced"
+    class: "RlEnhancedCtaStrategy"
+    vt_symbol: "BTCUSDT.BINANCE"
+    enabled: true
+    parameters:
+      fast_window: 10
+      slow_window: 30
+      fixed_size: 1
+      rl_enabled: true
+  
+  - name: "Momentum"
+    class: "MomentumCtaStrategy"
+    vt_symbol: "BTCUSDT.BINANCE"
+    enabled: false
+    parameters:
+      fast_window: 10
+      slow_window: 30
+      fixed_size: 1
+  
+  - name: "MeanReversion"
+    class: "MeanReversionCtaStrategy"
+    vt_symbol: "BTCUSDT.BINANCE"
+    enabled: false
+    parameters:
+      boll_window: 20
+      boll_dev: 2.0
+      fixed_size: 1
+  
+  - name: "Breakout"
+    class: "BreakoutCtaStrategy"
+    vt_symbol: "BTCUSDT.BINANCE"
+    enabled: false
+    parameters:
+      lookback_window: 20
+      fixed_size: 1
+
+data:
+  # Binance WebSocket endpoint
+  ws_endpoint: "wss://stream.binance.com:9443/ws"
+  
+  # Binance REST API endpoint
+  rest_endpoint: "https://api.binance.com/api/v3"
+  
+  # Reconnection settings
+  reconnect_interval: 5
+  max_reconnect_attempts: 10
+  
+  # Data buffer size
+  buffer_size: 100
+
+intelligence:
+  # HMM Regime Detection
+  hmm:
+    enabled: true
+    n_states: 4
+    lookback_bars: 100
+  
+  # Markov Decision Tree
+  decision_tree:
+    enabled: true
+    max_depth: 5
+  
+  # Self-Learning
+  self_learning:
+    enabled: true
+    retrain_interval: 1800  # seconds
+    min_samples: 100
+  
+  # Adaptive Learning
+  adaptive:
+    enabled: true
+    regime_strategy_map:
+      bull: "MomentumCtaStrategy"
+      bear: "MeanReversionCtaStrategy"
+      volatile: "BreakoutCtaStrategy"
+      sideways: "RlEnhancedCtaStrategy"
+
+orchestration:
+  # Health monitoring
+  health_check_interval: 60
+  
+  # Auto-restart on failure
+  auto_restart: true
+  restart_delay: 10
+  
+  # Config hot-reload
+  config_reload: true
+  config_watch_interval: 30
+
+telegram:
+  enabled: true
+  admin_chat_id: 7361240735
+  alerts:
+    - trade_executed
+    - position_closed
+    - risk_alert
+    - system_error
+
+dashboard:
+  host: "0.0.0.0"
+  port: 8080
+  refresh_interval: 1

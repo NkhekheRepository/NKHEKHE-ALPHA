@@ -90,6 +90,40 @@ A comprehensive multi-agent AI system for quantitative research and financial an
 
 ## System Components
 
+### 7. Paper Trading Engine
+Autonomous quant trading system with VNPY integration, self-learning, and 7-layer architecture:
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      PAPER TRADING ENGINE                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Layer 7: Command & Control (Telegram Bot, Web Dashboard)                  │
+│ Layer 6: Orchestration (Health Monitor, Auto-Restart, Config Reload)      │
+│ Layer 5: Execution (Order Manager, Leverage Handler)                       │
+│ Layer 4: Intelligence (HMM, Decision Tree, Self-Learning, Ensemble)      │
+│ Layer 3: Signal Generation (MA Crossover, RSI, Aggregator)                 │
+│ Layer 2: Risk Management (Risk Engine, Circuit Breaker, Emergency Stop)    │
+│ Layer 1: Data & Connectivity (Binance WebSocket, REST Fallback)            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+- 75x leverage for maximum profit potential
+- Self-healing (auto-restart, fallbacks)
+- Self-learning (online training)
+- Adaptive learning (regime detection with HMM)
+- VNPY integration (CtaTemplate, MainEngine, ArrayManager)
+
+**Quick Start:**
+```bash
+python run_paper_trading.py
+```
+
+**Test Results:** 60/60 tests passed
+
+---
+
 ### 1. Multi-Agent System
 Four specialized AI agents working collaboratively:
 
@@ -228,6 +262,30 @@ financial_orchestrator/
 │   ├── start_watchtower.sh
 │   ├── install_service.sh
 │   └── telegram-watchtower.service
+│
+├── paper_trading/               # Paper Trading Engine (7-layer architecture)
+│   ├── engine.py               # Main PaperTradingEngine
+│   ├── config.yaml             # Trading configuration
+│   ├── run_paper_trading.py    # Launcher script
+│   ├── telegram_commands.py    # Telegram bot commands
+│   ├── dashboard/              # Web dashboard
+│   │   ├── app.py
+│   │   └── templates/index.html
+│   └── layers/                 # 7-layer architecture
+│       ├── layer1_data/        # Data & Connectivity
+│       ├── layer2_risk/       # Risk Management
+│       ├── layer3_signals/     # Signal Generation
+│       ├── layer4_intelligence/ # Intelligence (ML/AI)
+│       ├── layer5_execution/   # Execution
+│       └── layer6_orchestration/ # Orchestration
+│
+├── vnpy_engine/                # VNPY Trading Engine
+│   ├── tests/                  # Test suite (60 tests)
+│   ├── cta_strategies.py       # CTA Strategies
+│   ├── rl_module.py            # RL Module
+│   └── test_validate.py        # Validation
+│
+├── data_lab/                    # Data Laboratory
 │
 ├── logs/                        # Log files
 │   ├── risk_monitor.log
@@ -385,6 +443,9 @@ See `docs/` directory for detailed component documentation:
 - `telegram-bot.md` - Bot commands and service setup
 - `risk-monitoring.md` - Risk configuration
 - `validation-engine.md` - Validation rules
+- `PAPER_TRADING.md` - Paper Trading Engine (7-layer architecture)
+- `VNPY_ENGINE.md` - VNPY Trading Engine with RL integration
+- `architecture-diagrams.md` - System architecture diagrams
 
 ## License
 

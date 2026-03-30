@@ -23,13 +23,18 @@ def test_validate_with_rl():
     with patch('vnpy_local.rl_module.get_rl_agent', create=True) as mock_get_rl:
         mock_get_rl.return_value = mock_rl_agent
         
-        mock_cta_engine = MockCtaEngine()  # Need to import or define this
+        # Create mock CTA engine with write_log method
+        mock_cta_engine = Mock()
+        mock_cta_engine.write_log = Mock()
         
-        # Let's just test the strategy creation and method directly
+        # Create mock strategy with required attributes
         strategy = RlEnhancedCtaStrategy.__new__(RlEnhancedCtaStrategy)
         strategy.rl_agent = mock_rl_agent
         strategy.rl_enabled = True
         strategy.pos = 0
+        strategy.vt_symbol = "BTCUSDT"
+        strategy.cta_engine = mock_cta_engine
+        strategy.write_log = mock_cta_engine.write_log
         
         # Create a mock bar
         bar = BarData(
@@ -86,11 +91,6 @@ def test_validate_with_rl():
         # Test 6: RL says "sell" for bullish signal -> should return False
         result = strategy._validate_with_rl(bar, 1)  # bullish signal
         print(f"Test 6 - Bullish signal, RL sell: {result} (expected: False)")
-
-# Need to define MockCtaEngine here
-class MockCtaEngine:
-    def __init__(self):
-        pass
 
 if __name__ == "__main__":
     test_validate_with_rl()
