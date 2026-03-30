@@ -16,19 +16,24 @@ NKHEKHE ALPHA is a comprehensive autonomous quantitative trading system designed
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                     10-LAYER MODULAR ARCHITECTURE                    │   │
+│  │                     15-LAYER MODULAR ARCHITECTURE                    │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
 │  │                                                                       │   │
 │  │  Layer 1: DATA          - Binance WebSocket, REST API              │   │
 │  │  Layer 2: FEATURES      - ATR, ADX, RSI, MACD, Bollinger            │   │
 │  │  Layer 3: STRATEGY      - CtaTemplate, Signal Generation            │   │
-│  │  Layer 4: INTELLIGENCE  - HMM, PPO, Markov Decision Tree            │   │
+│  │  Layer 4: INTELLIGENCE  - HMM, PPO, Uncertainty, Exploration       │   │
 │  │  Layer 5: SCORING       - Trade opportunity scoring                  │   │
 │  │  Layer 6: RISK          - 75x Leverage, Correlation, Portfolio      │   │
 │  │  Layer 7: EXECUTION     - VNPY Order Management                     │   │
 │  │  Layer 8: MEMORY        - PostgreSQL + Redis                        │   │
 │  │  Layer 9: SELF-HEALING  - Auto-restart, Fallbacks                  │   │
 │  │  Layer 10: ADAPTIVE     - Regime Detection, Online Training         │   │
+│  │  Layer 11: EVENTS       - Event Bus, Layer-to-Layer Comms          │   │
+│  │  Layer 12: UNCERTAINTY  - Mean +/- Variance Predictions            │   │
+│  │  Layer 13: EXPLORATION  - Adaptive Epsilon-Greedy                  │   │
+│  │  Layer 14: VALIDATION   - Walk-Forward, Monte Carlo, OOS          │   │
+│  │  Layer 15: EVOLUTION    - Genetic Algorithm Strategy Opt           │   │
 │  │                                                                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -40,7 +45,7 @@ NKHEKHE ALPHA is a comprehensive autonomous quantitative trading system designed
 │  │  • Flask Dashboard (Port 8080)                                      │   │
 │  │  • Risk Monitor                                                      │   │
 │  │  • Health Check System                                               │   │
-│  │  • Validation Engine                                                │   │
+│  │  • Test Suite (test_all_layers.py)                                  │   │
 │  │                                                                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -49,7 +54,7 @@ NKHEKHE ALPHA is a comprehensive autonomous quantitative trading system designed
 
 ---
 
-## 10-Layer Architecture
+## 15-Layer Architecture
 
 ### Layer 1: Data Layer
 **Location**: `paper_trading/layers/layer1_data/`
@@ -643,6 +648,98 @@ python integration_test.py
 2. **Database Password**: `nwa45690` - change in production
 3. **Telegram Bot Token**: Keep secure
 4. **Rate Limiting**: Implemented for API protection
+
+---
+
+## New Layers (v2.0)
+
+### Layer 11: Event Layer
+**Location**: `paper_trading/layers/layer10_events/event_bus.py`
+
+Event-driven communication between all layers.
+
+| Component | Description |
+|-----------|-------------|
+| `EventBus` | Central message bus for layer-to-layer communication |
+| `Event` | Typed event data structure with priority |
+| `EventType` | 20+ event types (TRADE_OPENED, RISK_ALERT, SIGNAL_GENERATED, etc.) |
+
+**Features**:
+- Publish/subscribe pattern with typed handlers
+- Event history and replay
+- Filtered subscriptions
+- Wildcard subscribers for all events
+- Event statistics tracking
+
+### Layer 12: Uncertainty Model
+**Location**: `paper_trading/layers/layer4_intelligence/uncertainty_model.py`
+
+Probabilistic predictions with mean +/- variance bounds.
+
+| Rule | Behavior |
+|------|----------|
+| **High uncertainty** | Reduce position size |
+| **Low uncertainty + high expectancy** | Increase position size |
+| **Insufficient data** | Minimal position (20% of base) |
+
+**Features**:
+- Bayesian-style uncertainty estimation
+- Regime-aware variance adjustment (volatile: 1.5x, trending: 0.8x)
+- Calibration checking (MAE, MAPE)
+- Position size adjustment based on confidence
+
+### Layer 13: Exploration Engine
+**Location**: `paper_trading/layers/layer4_intelligence/exploration_engine.py`
+
+Adaptive epsilon-greedy exploration for discovering new market edges.
+
+| Parameter | Value |
+|-----------|-------|
+| **Base epsilon** | 0.15 |
+| **Min epsilon** | 0.02 |
+| **Max epsilon** | 0.40 |
+| **Exploration size** | 30% of base |
+
+**Behavior**:
+- Increases exploration when performance degrades
+- Tracks exploration vs exploitation success rates
+- Uses smaller capital for exploratory trades
+- Adapts exploration rate dynamically
+
+### Layer 14: Model Validation Engine
+**Location**: `paper_trading/layers/layer5_validation/model_validator.py`
+
+Continuous verification: "Is my edge still valid?"
+
+| Method | Purpose |
+|--------|---------|
+| **Walk-Forward** | Train on past, test on recent data |
+| **Monte Carlo** | Test if returns differ from random |
+| **Out-of-Sample** | Validate on unseen data |
+| **Bootstrap CI** | Confidence intervals via resampling |
+
+**Features**:
+- Permutation testing for significance
+- Statistical significance at p < 0.05
+- Automatic risk reduction when edge degrades
+
+### Layer 15: Evolution Engine
+**Location**: `paper_trading/layers/layer4_intelligence/evolution_engine.py`
+
+Genetic algorithm for strategy parameter optimization.
+
+| Parameter | Value |
+|-----------|-------|
+| **Population** | 20 genomes |
+| **Mutation rate** | 0.15 |
+| **Crossover rate** | 0.70 |
+| **Elite count** | 2 |
+
+**Features**:
+- Tournament selection of best performers
+- Gaussian mutation of strategy parameters
+- Dynamic capital allocation based on fitness
+- Sharpe + Sortino composite fitness scoring
 
 ---
 
