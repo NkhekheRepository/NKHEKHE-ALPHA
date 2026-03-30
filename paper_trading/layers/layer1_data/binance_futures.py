@@ -107,7 +107,7 @@ class BinanceFuturesClient:
             params = {
                 "symbol": symbol.upper(),
                 "side": side.upper(),
-                "orderType": order_type.upper(),
+                "type": order_type.upper(),
                 "timestamp": timestamp
             }
             
@@ -178,7 +178,7 @@ class BinanceFuturesClient:
             signature = self._sign(params)
             
             response = requests.get(
-                f"{FUTURES_API_URL}/fapi/v1/positionRisk",
+                f"{FUTURES_API_URL}/fapi/v2/positionRisk",
                 params={"symbol": symbol.upper(), "timestamp": timestamp, "signature": signature},
                 headers=self._headers(),
                 timeout=10
@@ -206,7 +206,7 @@ class BinanceFuturesClient:
             signature = self._sign(params)
             
             response = requests.get(
-                f"{FUTURES_API_URL}/fapi/v1/positionRisk",
+                f"{FUTURES_API_URL}/fapi/v2/positionRisk",
                 params={"timestamp": timestamp, "signature": signature},
                 headers=self._headers(),
                 timeout=10
@@ -229,7 +229,7 @@ class BinanceFuturesClient:
             signature = self._sign(params)
             
             response = requests.get(
-                f"{FUTURES_API_URL}/fapi/v1/account",
+                f"{FUTURES_API_URL}/fapi/v2/account",
                 params={"timestamp": timestamp, "signature": signature},
                 headers=self._headers(),
                 timeout=10
