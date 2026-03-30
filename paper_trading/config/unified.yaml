@@ -5,7 +5,7 @@
 trading:
   symbol: BTCUSDT
   leverage: 75
-  update_interval: 30
+  update_interval: 10800  # 3 hours
   initial_capital: 10000
   mode: paper  # paper, live, backtest
 

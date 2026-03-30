@@ -60,7 +60,7 @@ class DecisionReporter:
         self.token = telegram_token
         self.chat_id = admin_chat_id
         self.last_report_time = 0
-        self.report_interval = 30
+        self.report_interval = 10800  # 3 hours
         self.start_time = time.time()
         
         self.metrics = {
@@ -283,7 +283,7 @@ class AutonomousTrader:
         self.trade_history = []
         
         self.check_interval = 30
-        self.report_interval = 30
+        self.report_interval = 10800  # 3 hours
         self.last_trade_time = 0
         self.last_report_time = 0
         self.start_time = time.time()
