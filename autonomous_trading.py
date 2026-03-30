@@ -6,7 +6,7 @@ Self-learning, self-healing, adaptive trading system with 75x leverage.
 
 Features:
 - Max 5 trades per day for risk management
-- Continuous decision reports to Telegram (every 30 seconds)
+- Decision reports to Telegram (every 3 hours)
 - Daily comprehensive performance reports
 - HMM regime detection (bull, bear, volatile, sideways)
 - Self-learning engine with online training
@@ -417,8 +417,8 @@ class AutonomousTrader:
         self.running = True
         self.trading_engine.start()
         
-        print("🚀 Autonomous trading started with continuous decision reporting")
-        self._send_alert("🟢 Autonomous Trading Bot Started with AI Decision Reports\n75x Leverage | BTCUSDT | Reports every 30s")
+        print("🚀 Autonomous trading started with decision reports every 3 hours")
+        self._send_alert("🟢 Autonomous Trading Bot Started with AI Decision Reports\n75x Leverage | BTCUSDT | Reports every 3 hours")
         
         while self.running:
             try:
