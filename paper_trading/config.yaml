@@ -11,6 +11,9 @@ trading:
   # Trading pairs
   symbols: 
     - BTCUSDT
+    - ETHUSDT
+    - SOLUSDT
+    - BNBUSDT
   
   # Update interval in seconds
   update_interval: 5
