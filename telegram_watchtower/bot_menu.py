@@ -36,6 +36,9 @@ class BotMenu:
         """Get main menu keyboard layout"""
         return [
             [
+                {"text": "🚀 TRADING CONTROL", "callback_data": "trading_menu"},
+            ],
+            [
                 {"text": "🟢 System On", "callback_data": CALLBACK_ACTIONS['system_on']},
                 {"text": "🔴 System Off", "callback_data": CALLBACK_ACTIONS['system_off']},
                 {"text": "🔄 Restart", "callback_data": CALLBACK_ACTIONS['restart']},
@@ -52,6 +55,33 @@ class BotMenu:
             ],
             [
                 {"text": "🔒 Hide Menu", "callback_data": CALLBACK_ACTIONS['hide_menu']},
+            ],
+        ]
+    
+    def get_trading_menu_keyboard(self) -> List[List[Dict]]:
+        """Get trading menu keyboard layout"""
+        return [
+            [
+                {"text": "📈 LONG", "callback_data": "trade_long"},
+                {"text": "📉 SHORT", "callback_data": "trade_short"},
+                {"text": "🛑 CLOSE", "callback_data": "trade_close"},
+            ],
+            [
+                {"text": "💰 Balance", "callback_data": "trade_balance"},
+                {"text": "⚡ Leverage", "callback_data": "trade_leverage"},
+                {"text": "📊 Positions", "callback_data": "trade_positions"},
+            ],
+            [
+                {"text": "📈 Signal", "callback_data": "trade_signal"},
+                {"text": "📜 History", "callback_data": "trade_history"},
+                {"text": "🔄 Refresh", "callback_data": "trade_status"},
+            ],
+            [
+                {"text": "🟢 Live", "callback_data": "trade_start"},
+                {"text": "🔴 Stop", "callback_data": "trade_stop"},
+            ],
+            [
+                {"text": "⬅️ Back to Menu", "callback_data": "main"},
             ],
         ]
     
@@ -99,6 +129,69 @@ Use the menu below or type commands directly."""
                 msg, keyboard = self.format_main_menu()
                 bot.edit_message_reply_markup(chat_id, msg, reply_markup=keyboard)
                 return None
+            
+            elif action == 'trading_menu':
+                msg = "🚀 TRADING CONTROL\n\nSelect an action:"
+                keyboard = self.get_trading_menu_keyboard()
+                bot.edit_message_reply_markup(chat_id, msg, reply_markup=keyboard)
+                return None
+            
+            elif action == 'trade_long':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_long(chat_id, '/long 0.001', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_short':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_short(chat_id, '/short 0.001', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_close':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_close(chat_id, '/close', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_balance':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_balance(chat_id, '/balance', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_leverage':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_leverage(chat_id, '/leverage', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_positions':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_positions(chat_id, '/positions', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_signal':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_signal(chat_id, '/signal', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_history':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_history(chat_id, '/history', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_status':
+                if bot.command_processor.trading_engine:
+                    return bot.command_processor.cmd_trade_status(chat_id, '/trade', bot)
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_start':
+                if bot.command_processor.trading_engine:
+                    bot.command_processor.trading_engine.start()
+                    return "🟢 Trading engine started"
+                return "❌ Trading engine not initialized"
+            
+            elif action == 'trade_stop':
+                if bot.command_processor.trading_engine:
+                    bot.command_processor.trading_engine.stop()
+                    return "🔴 Trading engine stopped"
+                return "❌ Trading engine not initialized"
             
             elif action == CALLBACK_ACTIONS['system_on']:
                 return self._system_on(bot)

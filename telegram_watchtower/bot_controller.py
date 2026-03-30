@@ -38,6 +38,7 @@ class TelegramWatchtower:
         self.event_monitor = None
         self.log_tailer = None
         self.command_processor = None
+        self.trading_integration = None
         
         self.message_queue = []
         self.alerts = []
@@ -86,11 +87,20 @@ class TelegramWatchtower:
             from telegram_watchtower.log_tailer import LogTailer
             from telegram_watchtower.command_processor import CommandProcessor
             from telegram_watchtower.bot_menu import BotMenu
+            from telegram_watchtower.trading_integration import TradingBotIntegration
             
             self.event_monitor = EventMonitor(self.config)
             self.log_tailer = LogTailer(self.config)
             self.command_processor = CommandProcessor(self.config)
             self.bot_menu = BotMenu(self.config)
+            
+            self.trading_integration = TradingBotIntegration()
+            if self.trading_integration.initialize():
+                self.trading_integration.set_alert_callback(self._on_trade_alert)
+                self.command_processor.set_trading_engine(self.trading_integration)
+                logger.info("Trading integration initialized")
+            else:
+                logger.warning("Trading integration failed to initialize")
             
             logger.info("All components initialized successfully")
             return True
@@ -129,6 +139,11 @@ class TelegramWatchtower:
         logger.info("Health check thread started")
         
         return True
+    
+    def _on_trade_alert(self, message: str):
+        """Handle trade alerts from trading engine"""
+        logger.info(f"Trade alert received: {message[:50]}...")
+        self.broadcast_to_admins(message)
     
     def stop(self):
         """Stop the watch tower bot"""

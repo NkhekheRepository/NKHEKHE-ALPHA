@@ -49,7 +49,24 @@ class CommandProcessor:
             '/help': self.cmd_help,
             '/h': self.cmd_help,
             '/?': self.cmd_help,
+            
+            '/long': self.cmd_long,
+            '/short': self.cmd_short,
+            '/close': self.cmd_close,
+            '/balance': self.cmd_balance,
+            '/positions': self.cmd_positions,
+            '/leverage': self.cmd_leverage,
+            '/signal': self.cmd_signal,
+            '/history': self.cmd_history,
+            '/trade': self.cmd_trade_status,
+            '/futures': self.cmd_trade_status,
         }
+        
+        self.trading_engine = None
+    
+    def set_trading_engine(self, engine):
+        """Set the trading engine for futures commands."""
+        self.trading_engine = engine
     
     def process(self, chat_id: int, text: str, bot) -> str:
         """Process a command and return response"""
@@ -409,6 +426,16 @@ class CommandProcessor:
         response = [
             "*Financial Orchestrator Watch Tower*\n",
             f"Version: {self.config['watchtower']['version']}\n",
+            "*🚀 Futures Trading (75x):*\n",
+            "📈 `/long [qty]` - Open LONG",
+            "📉 `/short [qty]` - Open SHORT",
+            "🛑 `/close` - Close position",
+            "💰 `/balance` - Wallet balance",
+            "📊 `/positions` - Open positions",
+            "⚡ `/leverage [1-75]` - Set leverage",
+            "📈 `/signal` - Trading signal",
+            "📜 `/history` - Trade history",
+            "🚀 `/trade` - Trading status\n",
             "*System Control:*\n",
             "🟢 `/systemon` - Start all components",
             "🔴 `/systemoff` - Stop all components",
@@ -420,9 +447,7 @@ class CommandProcessor:
             "📄 `/logs` - Recent logs",
             "📡 `/metrics` - System metrics",
             "🔔 `/alerts` - Recent alerts",
-            "📊 `/data` - Data ingestion summary",
-            "📖 `/help` - Show this help\n",
-            "*Shortcuts:* `/s`, `/wf`, `/ag`, `/m`, `/a`, `/d`, `/h`"
+            "📖 `/help` - Show this help"
         ]
         
         return "\n".join(response)
@@ -448,3 +473,218 @@ class CommandProcessor:
             'error': '\u274c',
             'info': '\u2139\ufe0f'
         }.get(severity, '\u2139\ufe0f')
+    
+    def cmd_long(self, chat_id: int, text: str, bot) -> str:
+        """Open LONG position"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized. Use /trade to start."
+        
+        parts = text.strip().split()
+        quantity = 0.001
+        
+        if len(parts) > 1:
+            try:
+                quantity = float(parts[1])
+            except ValueError:
+                return "❌ Invalid quantity. Usage: /long 0.001"
+        
+        result = self.trading_engine.long(quantity)
+        
+        if 'orderId' in result:
+            order = result.get('order', {})
+            return f"""
+📈 <b>LONG OPENED</b>
+
+✅ <b>Order ID:</b> {order.get('orderId')}
+💰 <b>Symbol:</b> {order.get('symbol')}
+📊 <b>Quantity:</b> {order.get('executedQty')}
+💵 <b>Price:</b> ${float(order.get('avgPrice', 0)):,.2f}
+⚡ <b>Leverage:</b> {result.get('leverage', 75)}x
+"""
+        elif 'error' in result:
+            return f"❌ Error: {result['error']}"
+        
+        return "❌ Order failed"
+    
+    def cmd_short(self, chat_id: int, text: str, bot) -> str:
+        """Open SHORT position"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized. Use /trade to start."
+        
+        parts = text.strip().split()
+        quantity = 0.001
+        
+        if len(parts) > 1:
+            try:
+                quantity = float(parts[1])
+            except ValueError:
+                return "❌ Invalid quantity. Usage: /short 0.001"
+        
+        result = self.trading_engine.short(quantity)
+        
+        if 'orderId' in result:
+            order = result.get('order', {})
+            return f"""
+📉 <b>SHORT OPENED</b>
+
+✅ <b>Order ID:</b> {order.get('orderId')}
+💰 <b>Symbol:</b> {order.get('symbol')}
+📊 <b>Quantity:</b> {order.get('executedQty')}
+💵 <b>Price:</b> ${float(order.get('avgPrice', 0)):,.2f}
+⚡ <b>Leverage:</b> {result.get('leverage', 75)}x
+"""
+        elif 'error' in result:
+            return f"❌ Error: {result['error']}"
+        
+        return "❌ Order failed"
+    
+    def cmd_close(self, chat_id: int, text: str, bot) -> str:
+        """Close position"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized. Use /trade to start."
+        
+        result = self.trading_engine.close()
+        
+        if 'orderId' in result or result.get('message') == 'No position':
+            status = self.trading_engine.get_status()
+            position = status.get('position', {})
+            
+            if position and position.get('amount', 0) != 0:
+                return f"❌ Failed to close position"
+            
+            return """
+🛑 <b>POSITION CLOSED</b>
+
+✅ All positions closed successfully
+"""
+        elif 'error' in result:
+            return f"❌ Error: {result['error']}"
+        
+        return "❌ Close failed"
+    
+    def cmd_balance(self, chat_id: int, text: str, bot) -> str:
+        """Show balance"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized. Use /trade to start."
+        
+        status = self.trading_engine.get_status()
+        balance = status.get('balance', 0)
+        wallet = status.get('wallet', {})
+        
+        return f"""
+💰 <b>WALLET BALANCE</b>
+
+<b>USDT:</b> ${balance:,.2f}
+<b>Unrealized PnL:</b> ${wallet.get('total_unrealized_pnl', 0):.2f}
+<b>Total:</b> ${wallet.get('total_assets_value', balance):,.2f}
+<b>Leverage:</b> {status.get('leverage', 75)}x
+<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨
+"""
+    
+    def cmd_positions(self, chat_id: int, text: str, bot) -> str:
+        """Show open positions"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized. Use /trade to start."
+        
+        status = self.trading_engine.get_status()
+        position = status.get('position', {})
+        
+        if not position or position.get('amount', 0) == 0:
+            return "📊 <b>No open positions</b>"
+        
+        amount = position.get('amount', 0)
+        side = "📈 LONG" if amount > 0 else "📉 SHORT"
+        
+        return f"""
+📊 <b>OPEN POSITION</b>
+
+<b>Side:</b> {side}
+<b>Amount:</b> {abs(amount)} BTC
+<b>Entry:</b> ${position.get('entry_price', 0):,.2f}
+<b>Leverage:</b> {position.get('leverage', 75)}x
+<b>Unrealized PnL:</b> ${position.get('unrealized_pnl', 0):.2f}
+"""
+    
+    def cmd_leverage(self, chat_id: int, text: str, bot) -> str:
+        """Set or show leverage"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized. Use /trade to start."
+        
+        parts = text.strip().split()
+        
+        if len(parts) > 1:
+            try:
+                leverage = int(parts[1])
+                if leverage < 1 or leverage > 75:
+                    return "❌ Leverage must be between 1 and 75"
+                
+                self.trading_engine.set_leverage(leverage)
+                return f"⚡ <b>LEVERAGE SET</b>\n\n✅ Leverage set to {leverage}x"
+                
+            except ValueError:
+                return "❌ Invalid leverage. Usage: /leverage 25"
+        
+        status = self.trading_engine.get_status()
+        return f"⚡ <b>CURRENT LEVERAGE:</b> {status.get('leverage', 75)}x"
+    
+    def cmd_signal(self, chat_id: int, text: str, bot) -> str:
+        """Show current trading signal"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized. Use /trade to start."
+        
+        status = self.trading_engine.get_status()
+        price = status.get('price', 0)
+        
+        return f"""
+📈 <b>TRADING SIGNAL</b>
+
+<b>Symbol:</b> {status.get('symbol', 'BTCUSDT')}
+<b>Price:</b> ${price:,.2f}
+<b>Leverage:</b> {status.get('leverage', 75)}x
+<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨
+"""
+    
+    def cmd_history(self, chat_id: int, text: str, bot) -> str:
+        """Show trade history"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized. Use /trade to start."
+        
+        history = self.trading_engine.get_trade_history(limit=5)
+        
+        if not history:
+            return "📜 <b>No trade history</b>"
+        
+        lines = ["📜 <b>TRADE HISTORY</b>\n"]
+        
+        for trade in history[:5]:
+            side = "📈" if trade.get('side') == 'BUY' else "📉"
+            lines.append(f"{side} {trade.get('symbol')} {trade.get('executedQty')} @ ${float(trade.get('price', 0)):,.0f}")
+        
+        return "\n".join(lines)
+    
+    def cmd_trade_status(self, chat_id: int, text: str, bot) -> str:
+        """Start or show trading status"""
+        if not self.trading_engine:
+            return "❌ Trading engine not initialized."
+        
+        status = self.trading_engine.get_status()
+        position = status.get('position', {})
+        
+        running = "🟢" if status.get('running') else "🔴"
+        
+        return f"""
+🚀 <b>TRADING ENGINE</b>
+
+<b>Status:</b> {running} {'Running' if status.get('running') else 'Stopped'}
+<b>Symbol:</b> {status.get('symbol', 'BTCUSDT')}
+<b>Price:</b> ${status.get('price', 0):,.2f}
+<b>Balance:</b> ${status.get('balance', 0):,.2f}
+<b>Leverage:</b> {status.get('leverage', 75)}x
+<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨
+
+<b>Position:</b> {position.get('amount', 0) if position else 0} BTC
+<b>PnL:</b> ${position.get('unrealized_pnl', 0) if position else 0:.2f}
+
+━━━━━━━━━━━━━━━━━━
+<i>Commands: /long, /short, /close, /balance, /positions</i>
+"""
