@@ -238,15 +238,19 @@ class TelegramWatchtower:
             return None
         
         if self.command_processor:
+            from telegram_watchtower.command_processor import ACTION_COMMANDS
             response = self.command_processor.process(chat_id, text, self)
             if response and chat_id:
-                text_lower = text.strip().lower()
+                text_lower = text.strip().split()[0] if text.strip() else ''
                 if text_lower in ['/start', '/hello', '/menu']:
+                    # Show dashboard inline
                     msg, keyboard = self.bot_menu.format_main_menu() if self.bot_menu else (response, None)
                     self.send_keyboard(chat_id, msg, keyboard)
-                elif text_lower in ['/hide', '/systemon', '/systemoff']:
+                elif text_lower in ACTION_COMMANDS:
+                    # Action results: send plain text, no keyboard append
                     self.send_message(chat_id, response)
                 else:
+                    # Info commands: send with dashboard keyboard for navigation
                     keyboard = self.command_processor.get_main_menu_keyboard() if self.command_processor else None
                     if keyboard:
                         self.send_keyboard(chat_id, response, keyboard)
@@ -269,17 +273,27 @@ class TelegramWatchtower:
             return None
         
         if self.bot_menu:
-            response = self.bot_menu.handle_callback(data, chat_id, self)
-            self.answer_callback_query(callback_query_id)
+            result = self.bot_menu.handle_callback(data, chat_id, self)
             
-            if response:
-                if data == 'hide':
-                    self.send_message(chat_id, response)
+            # Get descriptive feedback for the callback
+            feedback = self.bot_menu.get_callback_feedback(data)
+            self.answer_callback_query(callback_query_id, feedback)
+            
+            if result:
+                # Handle new tuple return type: (response_text, keyboard_or_None)
+                if isinstance(result, tuple):
+                    text, keyboard = result
+                    if keyboard:
+                        # Edit message with new content and keyboard (navigation)
+                        self.send_keyboard(chat_id, text, keyboard)
+                    else:
+                        # Send as separate message (action results, confirmations)
+                        self.send_message(chat_id, text)
                 else:
-                    msg, keyboard = self.bot_menu.format_main_menu()
-                    self.send_keyboard(chat_id, response, keyboard)
+                    # Legacy single-string response
+                    self.send_message(chat_id, result)
             
-            return response
+            return result
         
         self.answer_callback_query(callback_query_id, "Menu not available")
         return None

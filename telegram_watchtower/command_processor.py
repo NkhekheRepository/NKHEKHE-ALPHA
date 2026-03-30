@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Command Processor for Telegram Watch Tower
-Handles user commands and generates responses
+Handles user commands and generates responses (HTML formatted)
 """
 
 import logging
@@ -19,23 +19,11 @@ except ImportError:
 
 logger = logging.getLogger('CommandProcessor')
 
-# Shared state file for dashboard
-STATE_FILE = '/tmp/nkhekhe_dashboard_state.json'
+# Import shared state reader from bot_menu (no duplicate)
+from telegram_watchtower.bot_menu import load_dashboard_state
 
-
-def _load_state() -> Optional[Dict]:
-    """Load dashboard state from shared file."""
-    try:
-        if not os.path.exists(STATE_FILE):
-            return None
-        mtime = os.path.getmtime(STATE_FILE)
-        import time
-        if time.time() - mtime > 300:
-            return None
-        with open(STATE_FILE, 'r') as f:
-            return json.load(f)
-    except Exception:
-        return None
+# Commands that are actions (should NOT get dashboard keyboard appended)
+ACTION_COMMANDS = {'/long', '/short', '/close', '/systemon', '/systemoff', '/hide'}
 
 
 class CommandProcessor:
@@ -134,35 +122,81 @@ class CommandProcessor:
             ],
         ]
     
+    # ═══════════════════════════════════════════════════════════════
+    # CORE COMMANDS
+    # ═══════════════════════════════════════════════════════════════
+    
     def cmd_start(self, chat_id: int, text: str, bot) -> str:
-        """Handle /start command - Show welcome with menu"""
-        response = [
-            "🤖 <b>NKHEKHE ALPHA — Trading Dashboard</b>",
-            "━━━━━━━━━━━━━━━━━━",
-            "",
-            "✅ System Status: Online",
-            f"📅 Version: {self.config['watchtower']['version']}",
-            "🔐 Access: Admin Authorized",
-            "",
-            "━━━━━━━━━━━━━━━━━━",
-            "",
-            "Use the dashboard buttons below or type commands.",
-            "",
-            "📊 /dashboard  🧠 /intel  🤖 /portfolio  🛡️ /risk"
-        ]
-        return "\n".join(response)
-
+        """Handle /start command - Show welcome with dashboard state"""
+        state = load_dashboard_state()
+        ts = datetime.now().strftime('%H:%M:%S')
+        version = self.config.get('watchtower', {}).get('version', '1.0.0')
+        
+        header = (
+            f"🤖 <b>NKHEKHE ALPHA — Trading Dashboard</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🕐 {ts}  |  v{version}\n"
+            f"✅ System: Online  |  🔐 Admin: Authorized\n"
+        )
+        
+        if state:
+            price = state.get('price', 0)
+            regime = state.get('regime', 'unknown')
+            position_side = state.get('position_side', 'FLAT')
+            pnl_pct = state.get('position_pnl_pct', 0)
+            balance = state.get('balance', 0)
+            daily_trades = state.get('daily_trades', 0)
+            max_trades = state.get('daily_max_trades', 5)
+            signal_action = state.get('signal_action', 'hold')
+            signal_conf = state.get('signal_confidence', 0)
+            uptime = self._format_uptime(state.get('uptime', 0))
+            
+            regime_emoji = {'bull': '🐂', 'bear': '🐻', 'volatile': '⚡', 'sideways': '➡️'}.get(regime, '❓')
+            action_emoji = {'buy': '🟢', 'sell': '🔴', 'hold': '⏸️'}.get(signal_action, '❓')
+            side_emoji = '📈' if position_side == 'LONG' else '📉' if position_side == 'SHORT' else '➡️'
+            pnl_emoji = '🟢' if pnl_pct > 0 else '🔴' if pnl_pct < 0 else '⚪'
+            
+            body = (
+                f"\n📊 <b>MARKET</b>\n"
+                f"├─ Price: ${price:,.2f}\n"
+                f"├─ Regime: {regime_emoji} {regime.upper()}\n"
+                f"└─ Signal: {action_emoji} {signal_action.upper()} ({signal_conf:.0%})\n"
+                f"\n💼 <b>POSITION</b>\n"
+                f"├─ {side_emoji} {position_side}\n"
+                f"└─ PnL: {pnl_emoji} {pnl_pct:+.2f}%\n"
+                f"\n💰 <b>ACCOUNT</b>\n"
+                f"├─ Balance: ${balance:,.2f}\n"
+                f"├─ Trades: {daily_trades}/{max_trades}\n"
+                f"└─ Uptime: {uptime}\n"
+            )
+        else:
+            body = (
+                f"\n⏳ <i>Waiting for trading data...\n"
+                f"Start autonomous_trading.py to see live dashboard.</i>\n"
+            )
+        
+        footer = (
+            f"\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Use buttons below or /help for commands</i>"
+        )
+        
+        return header + body + footer
+    
     def cmd_menu(self, chat_id: int, text: str, bot) -> str:
         """Handle /menu command - Show main menu"""
         return (
             "🤖 <b>NKHEKHE ALPHA DASHBOARD</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n"
-            "Select a section below."
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Select a section below to view trading data."
         )
     
     def cmd_hide(self, chat_id: int, text: str, bot) -> str:
         """Handle /hide command - Hide menu"""
         return "🔒 Menu hidden. Send /menu to show it again."
+    
+    # ═══════════════════════════════════════════════════════════════
+    # SYSTEM COMMANDS (HTML)
+    # ═══════════════════════════════════════════════════════════════
     
     def cmd_status(self, chat_id: int, text: str, bot) -> str:
         """Get system status"""
@@ -171,49 +205,50 @@ class CommandProcessor:
         
         uptime_str = self._format_uptime(status.get('uptime_seconds', 0))
         
-        response = [
-            f"*System Status*\n",
-            f"\u2139\ufe0f *Name:* {status['name']}",
-            f"\u2b50 *Version:* {status['version']}",
-            f"\u2705 *Status:* {status['status']}",
-            f"\u23f1 *Uptime:* {uptime_str}",
-            f"\n*Memory Usage:*",
-            f"  Total: {metrics['memory'].get('total_mb', 0):.0f} MB",
-            f"  Used: {metrics['memory'].get('used_mb', 0):.0f} MB",
-            f"  Available: {metrics['memory'].get('available_mb', 0):.0f} MB",
-            f"  Usage: {metrics['memory'].get('usage_percent', 0):.1f}%",
-            f"\n*Alerts:* {status.get('alerts_count', 0)}"
-        ]
-        
-        return "\n".join(response)
+        return (
+            f"📋 <b>SYSTEM STATUS</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"ℹ️ <b>Name:</b> {status['name']}\n"
+            f"⭐ <b>Version:</b> {status['version']}\n"
+            f"✅ <b>Status:</b> {status['status']}\n"
+            f"⏱ <b>Uptime:</b> {uptime_str}\n"
+            f"🔔 <b>Alerts:</b> {status.get('alerts_count', 0)}\n\n"
+            f"💾 <b>Memory</b>\n"
+            f"├─ Total: {metrics['memory'].get('total_mb', 0):.0f} MB\n"
+            f"├─ Used: {metrics['memory'].get('used_mb', 0):.0f} MB\n"
+            f"├─ Available: {metrics['memory'].get('available_mb', 0):.0f} MB\n"
+            f"└─ Usage: {metrics['memory'].get('usage_percent', 0):.1f}%"
+        )
     
     def cmd_workflows(self, chat_id: int, text: str, bot) -> str:
         """Get active workflows"""
         workflow_file = '/home/ubuntu/financial_orchestrator/logs/e2e_workflow_state.json'
         
-        response = ["*Active Workflows*\n"]
+        response = "📁 <b>ACTIVE WORKFLOWS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
         
         if os.path.exists(workflow_file):
             try:
                 with open(workflow_file, 'r') as f:
                     workflow = json.load(f)
                 
-                response.append(f"\u2b50 *Workflow ID:* {workflow.get('workflow_id', 'N/A')}")
-                response.append(f"\u2705 *Status:* {workflow.get('status', 'unknown')}")
-                response.append(f"\ud83d\udcbb *Progress:* {workflow.get('progress_percentage', 0)}%")
-                response.append(f"\ud83d\udd52 *Phases:* {len(workflow.get('phases', []))}")
+                response += (
+                    f"\n⭐ <b>Workflow ID:</b> {workflow.get('workflow_id', 'N/A')}\n"
+                    f"✅ <b>Status:</b> {workflow.get('status', 'unknown')}\n"
+                    f"💻 <b>Progress:</b> {workflow.get('progress_percentage', 0)}%\n"
+                    f"🕐 <b>Phases:</b> {len(workflow.get('phases', []))}\n"
+                )
                 
                 if workflow.get('phases'):
-                    response.append(f"\n*Phases:*")
+                    response += "\n<b>Phases:</b>\n"
                     for phase in workflow['phases']:
-                        status_icon = "\u2705" if phase.get('status') == 'completed' else "\u23f3"
-                        response.append(f"  {status_icon} {phase.get('name', 'Unknown')}")
+                        icon = "✅" if phase.get('status') == 'completed' else "⏳"
+                        response += f"  {icon} {phase.get('name', 'Unknown')}\n"
             except Exception as e:
-                response.append(f"\u274c Error loading workflow: {e}")
+                response += f"\n❌ Error loading workflow: {e}"
         else:
-            response.append(f"\n\ud83d\udcc4 No workflow state file found")
+            response += f"\n📄 No workflow state file found"
         
-        return "\n".join(response)
+        return response.rstrip()
     
     def cmd_agents(self, chat_id: int, text: str, bot) -> str:
         """Get agent statuses"""
@@ -222,22 +257,23 @@ class CommandProcessor:
             optimizer = AgentOptimizer()
             status = optimizer.get_optimization_status()
             
-            response = [
-                "*Agent Status*\n",
-                f"\u2705 *Optimization Active:* {status['optimization_active']}",
-                f"\ud83d\udcbb *Agents Tracked:* {status['agents_tracked']}",
-                f"\ud83d\udcc2 *Workflows Tracked:* {status['workflows_tracked']}",
-            ]
+            response = (
+                f"💻 <b>AGENT STATUS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"✅ <b>Optimization Active:</b> {status['optimization_active']}\n"
+                f"🤖 <b>Agents Tracked:</b> {status['agents_tracked']}\n"
+                f"📋 <b>Workflows Tracked:</b> {status['workflows_tracked']}\n"
+            )
             
             if status['agents_tracked'] > 0:
-                response.append(f"\n*Agent Details:*")
+                response += "\n<b>Agent Details:</b>\n"
                 for agent_id, data in optimizer.agent_performance.items():
-                    response.append(f"  \u2022 {agent_id}: {data['tasks_completed']} tasks")
+                    response += f"  • {agent_id}: {data['tasks_completed']} tasks\n"
+            
+            return response.rstrip()
             
         except Exception as e:
-            response = [f"*Agent Status*\n\u274c Error: {e}"]
-        
-        return "\n".join(response)
+            return f"💻 <b>AGENT STATUS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n❌ Error: {e}"
     
     def cmd_logs(self, chat_id: int, text: str, bot) -> str:
         """Get recent logs"""
@@ -246,7 +282,7 @@ class CommandProcessor:
         if len(parts) > 1:
             source_filter = parts[1]
         
-        logs = []
+        logs = ["📄 <b>RECENT LOGS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n"]
         log_dir = '/home/ubuntu/financial_orchestrator/logs'
         
         if os.path.exists(log_dir):
@@ -261,14 +297,15 @@ class CommandProcessor:
                             lines = f.readlines()
                             recent = [l.strip() for l in lines[-5:] if l.strip()]
                             if recent:
-                                logs.append(f"*{log_file}:*")
+                                logs.append(f"<b>{log_file}:</b>")
                                 for line in recent:
-                                    logs.append(f"  `{line[:100]}...`" if len(line) > 100 else f"  `{line}`")
+                                    escaped = line.replace('<', '&lt;').replace('>', '&gt;')
+                                    logs.append(f"  <code>{escaped[:100]}</code>")
                     except Exception as e:
-                        logs.append(f"*{log_file}:* Error: {e}")
+                        logs.append(f"<b>{log_file}:</b> Error: {e}")
         
-        if not logs:
-            return "*Recent Logs*\n\ud83d\udcc1 No logs found"
+        if len(logs) == 1:
+            return "📄 <b>RECENT LOGS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n📁 No logs found"
         
         return "\n".join(logs[:20])
     
@@ -276,45 +313,46 @@ class CommandProcessor:
         """Get system metrics"""
         metrics = bot.get_system_metrics()
         
-        response = [
-            "*System Metrics*\n",
-            f"\u23f1 *Uptime:* {metrics.get('uptime', 'unknown')}",
-            f"\n*Memory:*",
-            f"  Total: {metrics['memory'].get('total_mb', 0):.0f} MB",
-            f"  Used: {metrics['memory'].get('used_mb', 0):.0f} MB",
-            f"  Available: {metrics['memory'].get('available_mb', 0):.0f} MB",
-            f"  Usage: {metrics['memory'].get('usage_percent', 0):.1f}%",
-        ]
-        
-        return "\n".join(response)
+        return (
+            f"📈 <b>SYSTEM METRICS</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"⏱ <b>Uptime:</b> {metrics.get('uptime', 'unknown')}\n\n"
+            f"💾 <b>Memory</b>\n"
+            f"├─ Total: {metrics['memory'].get('total_mb', 0):.0f} MB\n"
+            f"├─ Used: {metrics['memory'].get('used_mb', 0):.0f} MB\n"
+            f"├─ Available: {metrics['memory'].get('available_mb', 0):.0f} MB\n"
+            f"└─ Usage: {metrics['memory'].get('usage_percent', 0):.1f}%"
+        )
     
     def cmd_alerts(self, chat_id: int, text: str, bot) -> str:
         """Get recent alerts"""
         if bot.event_monitor:
             summary = bot.event_monitor.get_event_summary()
             
-            response = [
-                "*Recent Alerts*\n",
-                f"\ud83d\udd14 *Total Events:* {summary['total_events']}",
-            ]
+            response = (
+                f"🔔 <b>RECENT ALERTS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"🔴 <b>Total Events:</b> {summary['total_events']}\n"
+            )
             
             for event_type, count in summary['alert_counts'].items():
                 if count > 0:
-                    response.append(f"  \u2022 {event_type}: {count}")
+                    response += f"  • {event_type}: {count}\n"
             
             if summary['recent_events']:
-                response.append(f"\n*Latest Events:*")
+                response += "\n<b>Latest Events:</b>\n"
                 for event in summary['recent_events'][-3:]:
                     emoji = self._get_severity_emoji(event.get('severity', 'info'))
-                    response.append(f"  {emoji} {event['type']}: {event['message'][:50]}...")
+                    msg = event.get('message', '')[:50]
+                    response += f"  {emoji} {event['type']}: {msg}...\n"
+            
+            return response.rstrip()
         else:
-            response = ["*Recent Alerts*\n\ud83d\udd14 No event monitor available"]
-        
-        return "\n".join(response)
+            return "🔔 <b>RECENT ALERTS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n🔔 No event monitor available"
     
     def cmd_data(self, chat_id: int, text: str, bot) -> str:
         """Get data ingestion summary"""
-        response = ["*Data Lab Status*\n"]
+        response = "📊 <b>DATA LAB STATUS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
         
         try:
             from data_lab import get_stream_manager
@@ -323,33 +361,39 @@ class CommandProcessor:
             stream_manager = get_stream_manager()
             stream_info = stream_manager.get_all_stream_info()
             
-            response.append("*Redis Streams:*")
+            response += "\n<b>Redis Streams:</b>\n"
             for stream_name, info in stream_info.items():
                 utilization = info.get('utilization_percent', 0)
                 emoji = "🟢" if utilization < 80 else "🟡" if utilization < 95 else "🔴"
-                response.append(
+                response += (
                     f"  {emoji} {stream_name}: {info.get('length', 0)}/{info.get('max_length', 0)} "
-                    f"({utilization:.1f}%)"
+                    f"({utilization:.1f}%)\n"
                 )
             
             db = get_duckdb_manager()
             db_stats = db.get_stats()
             
-            response.append(f"\n*DuckDB Storage:*")
-            response.append(f"  📊 Ticks: {db_stats.get('tick_count', 0):,}")
-            response.append(f"  📊 Klines: {db_stats.get('kline_count', 0):,}")
-            response.append(f"  💾 Size: {db_stats.get('file_size_mb', 0):.1f} MB")
+            response += (
+                f"\n<b>DuckDB Storage:</b>\n"
+                f"  📊 Ticks: {db_stats.get('tick_count', 0):,}\n"
+                f"  📊 Klines: {db_stats.get('kline_count', 0):,}\n"
+                f"  💾 Size: {db_stats.get('file_size_mb', 0):.1f} MB\n"
+            )
             
             symbols = db_stats.get('tracked_symbols', [])
             if symbols:
-                response.append(f"  📈 Symbols: {', '.join(symbols[:5])}")
+                response += f"  📈 Symbols: {', '.join(symbols[:5])}\n"
                 if len(symbols) > 5:
-                    response.append(f"     +{len(symbols) - 5} more")
+                    response += f"     +{len(symbols) - 5} more\n"
                     
         except Exception as e:
-            response.append(f"\n⚠️ Error loading data stats: {e}")
+            response += f"\n⚠️ Error loading data stats: {e}"
         
-        return "\n".join(response)
+        return response.rstrip()
+    
+    # ═══════════════════════════════════════════════════════════════
+    # SYSTEM CONTROL COMMANDS
+    # ═══════════════════════════════════════════════════════════════
     
     def cmd_system_on(self, chat_id: int, text: str, bot) -> str:
         """Start the entire system"""
@@ -369,10 +413,10 @@ class CommandProcessor:
             )
             
             if result.returncode == 0:
-                return "✅ *System Starting*\n\nAll components are being started. You will receive a confirmation message shortly."
+                return "✅ <b>SYSTEM STARTING</b>\n\nAll components are being started."
             else:
                 logger.error(f"Start script failed: {result.stderr}")
-                return f"❌ Start failed: {result.stderr[:200]}"
+                return f"❌ <b>Start failed:</b>\n<code>{result.stderr[:200]}</code>"
         except subprocess.TimeoutExpired:
             return "❌ Start command timed out"
         except Exception as e:
@@ -397,10 +441,10 @@ class CommandProcessor:
             )
             
             if result.returncode == 0:
-                return "🛑 *System Stopping*\n\nAll components are being stopped. You will receive a confirmation message."
+                return "🛑 <b>SYSTEM STOPPING</b>\n\nAll components are being stopped."
             else:
                 logger.error(f"Stop script failed: {result.stderr}")
-                return f"❌ Stop failed: {result.stderr[:200]}"
+                return f"❌ <b>Stop failed:</b>\n<code>{result.stderr[:200]}</code>"
         except subprocess.TimeoutExpired:
             return "❌ Stop command timed out"
         except Exception as e:
@@ -419,7 +463,7 @@ class CommandProcessor:
             ('workflow', 'Workflow Processor')
         ]
         
-        response = ["*System Status*\n"]
+        response = "📊 <b>QUICK STATUS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
         all_running = True
         
         for key, name in components:
@@ -428,81 +472,27 @@ class CommandProcessor:
                 try:
                     pid = int(open(pid_file).read().strip())
                     if psutil and psutil.pid_exists(pid):
-                        response.append(f"✅ {name}")
+                        response += f"✅ {name}\n"
                     else:
                         if os.path.exists(f'/proc/{pid}'):
-                            response.append(f"✅ {name}")
+                            response += f"✅ {name}\n"
                         else:
-                            response.append(f"❌ {name} (stale PID)")
+                            response += f"❌ {name} (stale PID)\n"
                             all_running = False
                 except:
-                    response.append(f"❌ {name} (error)")
+                    response += f"❌ {name} (error)\n"
                     all_running = False
             else:
-                response.append(f"❌ {name} (not running)")
+                response += f"❌ {name} (not running)\n"
                 all_running = False
         
-        response.append(f"\n{'🟢 All systems operational' if all_running else '⚠️ Some systems down'}")
+        response += f"\n{'🟢 All systems operational' if all_running else '⚠️ Some systems down'}"
         
-        return "\n".join(response)
+        return response
     
-    def cmd_help(self, chat_id: int, text: str, bot) -> str:
-        """Get help message"""
-        response = [
-            "🤖 <b>NKHEKHE ALPHA — Bot Commands</b>\n",
-            "<b>📊 Dashboard:</b>\n",
-            "🤖 `/dashboard` - Quick dashboard summary",
-            "🧠 `/intel` - AI intelligence & regime",
-            "🤖 `/portfolio` - Portfolio & position",
-            "📊 `/market` - Market data & indicators",
-            "🛡️ `/risk` - Risk status & protection\n",
-            "<b>🚀 Futures Trading (75x):</b>\n",
-            "📈 `/long [qty]` - Open LONG",
-            "📉 `/short [qty]` - Open SHORT",
-            "🛑 `/close` - Close position",
-            "💰 `/balance` - Wallet balance",
-            "📊 `/positions` - Open positions",
-            "⚡ `/leverage [1-75]` - Set leverage",
-            "📈 `/signal` - Trading signal",
-            "📜 `/history` - Trade history",
-            "🚀 `/trade` - Trading status\n",
-            "<b>⚙️ System Control:</b>\n",
-            "🟢 `/systemon` - Start all components",
-            "🔴 `/systemoff` - Stop all components",
-            "📊 `/sys` - Quick status check\n",
-            "<b>ℹ️ System Info:</b>\n",
-            "📋 `/status` - Detailed status",
-            "📁 `/workflows` - Active workflows",
-            "💻 `/agents` - Agent statuses",
-            "📄 `/logs` - Recent logs",
-            "📡 `/metrics` - System metrics",
-            "🔔 `/alerts` - Recent alerts",
-            "📖 `/help` - Show this help"
-        ]
-        
-        return "\n".join(response)
-    
-    def _format_uptime(self, seconds: float) -> str:
-        """Format uptime seconds to human readable string"""
-        if seconds is None:
-            return "unknown"
-        
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        
-        if hours > 0:
-            return f"{hours}h {minutes}m"
-        else:
-            return f"{minutes}m"
-    
-    def _get_severity_emoji(self, severity: str) -> str:
-        """Get emoji for severity level"""
-        return {
-            'critical': '\u26a0\ufe0f',
-            'warning': '\u1f7e1',
-            'error': '\u274c',
-            'info': '\u2139\ufe0f'
-        }.get(severity, '\u2139\ufe0f')
+    # ═══════════════════════════════════════════════════════════════
+    # TRADING COMMANDS
+    # ═══════════════════════════════════════════════════════════════
     
     def cmd_long(self, chat_id: int, text: str, bot) -> str:
         """Open LONG position"""
@@ -522,15 +512,15 @@ class CommandProcessor:
         
         if 'orderId' in result:
             order = result.get('order', {})
-            return f"""
-📈 <b>LONG OPENED</b>
-
-✅ <b>Order ID:</b> {order.get('orderId')}
-💰 <b>Symbol:</b> {order.get('symbol')}
-📊 <b>Quantity:</b> {order.get('executedQty')}
-💵 <b>Price:</b> ${float(order.get('avgPrice', 0)):,.2f}
-⚡ <b>Leverage:</b> {result.get('leverage', 75)}x
-"""
+            return (
+                f"📈 <b>LONG OPENED</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"✅ <b>Order ID:</b> {order.get('orderId')}\n"
+                f"💰 <b>Symbol:</b> {order.get('symbol')}\n"
+                f"📊 <b>Quantity:</b> {order.get('executedQty')}\n"
+                f"💵 <b>Price:</b> ${float(order.get('avgPrice', 0)):,.2f}\n"
+                f"⚡ <b>Leverage:</b> {result.get('leverage', 75)}x"
+            )
         elif 'error' in result:
             return f"❌ Error: {result['error']}"
         
@@ -554,15 +544,15 @@ class CommandProcessor:
         
         if 'orderId' in result:
             order = result.get('order', {})
-            return f"""
-📉 <b>SHORT OPENED</b>
-
-✅ <b>Order ID:</b> {order.get('orderId')}
-💰 <b>Symbol:</b> {order.get('symbol')}
-📊 <b>Quantity:</b> {order.get('executedQty')}
-💵 <b>Price:</b> ${float(order.get('avgPrice', 0)):,.2f}
-⚡ <b>Leverage:</b> {result.get('leverage', 75)}x
-"""
+            return (
+                f"📉 <b>SHORT OPENED</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"✅ <b>Order ID:</b> {order.get('orderId')}\n"
+                f"💰 <b>Symbol:</b> {order.get('symbol')}\n"
+                f"📊 <b>Quantity:</b> {order.get('executedQty')}\n"
+                f"💵 <b>Price:</b> ${float(order.get('avgPrice', 0)):,.2f}\n"
+                f"⚡ <b>Leverage:</b> {result.get('leverage', 75)}x"
+            )
         elif 'error' in result:
             return f"❌ Error: {result['error']}"
         
@@ -580,13 +570,9 @@ class CommandProcessor:
             position = status.get('position', {})
             
             if position and position.get('amount', 0) != 0:
-                return f"❌ Failed to close position"
+                return "❌ Failed to close position"
             
-            return """
-🛑 <b>POSITION CLOSED</b>
-
-✅ All positions closed successfully
-"""
+            return "🛑 <b>POSITION CLOSED</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ All positions closed successfully"
         elif 'error' in result:
             return f"❌ Error: {result['error']}"
         
@@ -601,15 +587,15 @@ class CommandProcessor:
         balance = status.get('balance', 0)
         wallet = status.get('wallet', {})
         
-        return f"""
-💰 <b>WALLET BALANCE</b>
-
-<b>USDT:</b> ${balance:,.2f}
-<b>Unrealized PnL:</b> ${wallet.get('total_unrealized_pnl', 0):.2f}
-<b>Total:</b> ${wallet.get('total_assets_value', balance):,.2f}
-<b>Leverage:</b> {status.get('leverage', 75)}x
-<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨
-"""
+        return (
+            f"💰 <b>WALLET BALANCE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"<b>USDT:</b> ${balance:,.2f}\n"
+            f"<b>Unrealized PnL:</b> ${wallet.get('total_unrealized_pnl', 0):.2f}\n"
+            f"<b>Total:</b> ${wallet.get('total_assets_value', balance):,.2f}\n"
+            f"<b>Leverage:</b> {status.get('leverage', 75)}x\n"
+            f"<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨"
+        )
     
     def cmd_positions(self, chat_id: int, text: str, bot) -> str:
         """Show open positions"""
@@ -620,20 +606,20 @@ class CommandProcessor:
         position = status.get('position', {})
         
         if not position or position.get('amount', 0) == 0:
-            return "📊 <b>No open positions</b>"
+            return "📊 <b>OPEN POSITIONS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n📊 No open positions"
         
         amount = position.get('amount', 0)
         side = "📈 LONG" if amount > 0 else "📉 SHORT"
         
-        return f"""
-📊 <b>OPEN POSITION</b>
-
-<b>Side:</b> {side}
-<b>Amount:</b> {abs(amount)} BTC
-<b>Entry:</b> ${position.get('entry_price', 0):,.2f}
-<b>Leverage:</b> {position.get('leverage', 75)}x
-<b>Unrealized PnL:</b> ${position.get('unrealized_pnl', 0):.2f}
-"""
+        return (
+            f"📊 <b>OPEN POSITION</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"<b>Side:</b> {side}\n"
+            f"<b>Amount:</b> {abs(amount)} BTC\n"
+            f"<b>Entry:</b> ${position.get('entry_price', 0):,.2f}\n"
+            f"<b>Leverage:</b> {position.get('leverage', 75)}x\n"
+            f"<b>Unrealized PnL:</b> ${position.get('unrealized_pnl', 0):.2f}"
+        )
     
     def cmd_leverage(self, chat_id: int, text: str, bot) -> str:
         """Set or show leverage"""
@@ -665,14 +651,14 @@ class CommandProcessor:
         status = self.trading_engine.get_status()
         price = status.get('price', 0)
         
-        return f"""
-📈 <b>TRADING SIGNAL</b>
-
-<b>Symbol:</b> {status.get('symbol', 'BTCUSDT')}
-<b>Price:</b> ${price:,.2f}
-<b>Leverage:</b> {status.get('leverage', 75)}x
-<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨
-"""
+        return (
+            f"📈 <b>TRADING SIGNAL</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"<b>Symbol:</b> {status.get('symbol', 'BTCUSDT')}\n"
+            f"<b>Price:</b> ${price:,.2f}\n"
+            f"<b>Leverage:</b> {status.get('leverage', 75)}x\n"
+            f"<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨"
+        )
     
     def cmd_history(self, chat_id: int, text: str, bot) -> str:
         """Show trade history"""
@@ -682,15 +668,15 @@ class CommandProcessor:
         history = self.trading_engine.get_trade_history(limit=5)
         
         if not history:
-            return "📜 <b>No trade history</b>"
+            return "📜 <b>TRADE HISTORY</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n📜 No trade history"
         
-        lines = ["📜 <b>TRADE HISTORY</b>\n"]
+        response = "📜 <b>TRADE HISTORY</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
         for trade in history[:5]:
             side = "📈" if trade.get('side') == 'BUY' else "📉"
-            lines.append(f"{side} {trade.get('symbol')} {trade.get('executedQty')} @ ${float(trade.get('price', 0)):,.0f}")
+            response += f"{side} {trade.get('symbol')} {trade.get('executedQty')} @ ${float(trade.get('price', 0)):,.0f}\n"
         
-        return "\n".join(lines)
+        return response.rstrip()
     
     def cmd_trade_status(self, chat_id: int, text: str, bot) -> str:
         """Start or show trading status"""
@@ -702,34 +688,32 @@ class CommandProcessor:
         
         running = "🟢" if status.get('running') else "🔴"
         
-        return f"""
-🚀 <b>TRADING ENGINE</b>
+        return (
+            f"🚀 <b>TRADING ENGINE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"<b>Status:</b> {running} {'Running' if status.get('running') else 'Stopped'}\n"
+            f"<b>Symbol:</b> {status.get('symbol', 'BTCUSDT')}\n"
+            f"<b>Price:</b> ${status.get('price', 0):,.2f}\n"
+            f"<b>Balance:</b> ${status.get('balance', 0):,.2f}\n"
+            f"<b>Leverage:</b> {status.get('leverage', 75)}x\n"
+            f"<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨\n\n"
+            f"<b>Position:</b> {position.get('amount', 0) if position else 0} BTC\n"
+            f"<b>PnL:</b> ${position.get('unrealized_pnl', 0) if position else 0:.2f}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Commands: /long, /short, /close, /balance, /positions</i>"
+        )
 
-<b>Status:</b> {running} {'Running' if status.get('running') else 'Stopped'}
-<b>Symbol:</b> {status.get('symbol', 'BTCUSDT')}
-<b>Price:</b> ${status.get('price', 0):,.2f}
-<b>Balance:</b> ${status.get('balance', 0):,.2f}
-<b>Leverage:</b> {status.get('leverage', 75)}x
-<b>Mode:</b> {'TESTNET' if status.get('testnet') else 'LIVE'} 🚨
-
-<b>Position:</b> {position.get('amount', 0) if position else 0} BTC
-<b>PnL:</b> ${position.get('unrealized_pnl', 0) if position else 0:.2f}
-
-━━━━━━━━━━━━━━━━━━
-<i>Commands: /long, /short, /close, /balance, /positions</i>
-"""
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # DASHBOARD COMMANDS
-    # ═══════════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════
+    # DASHBOARD COMMANDS (HTML)
+    # ═══════════════════════════════════════════════════════════════
 
     def cmd_dashboard(self, chat_id: int, text: str, bot) -> str:
         """Quick dashboard summary."""
-        state = _load_state()
+        state = load_dashboard_state()
         if not state:
             return (
                 "🤖 <b>DASHBOARD</b>\n"
-                "━━━━━━━━━━━━━━━━━━\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                 "⏳ No data available.\n"
                 "Start autonomous_trading.py to see live data."
             )
@@ -752,7 +736,7 @@ class CommandProcessor:
 
         return (
             f"🤖 <b>QUICK DASHBOARD</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⏱ {uptime}  |  💰 ${balance:,.2f}\n\n"
             f"📊 Market: ${price:,.2f} | {regime_emoji} {regime.upper()}\n"
             f"📡 Signal: {action_emoji} {signal_action.upper()} ({signal_conf:.0%})\n"
@@ -763,9 +747,9 @@ class CommandProcessor:
 
     def cmd_intel(self, chat_id: int, text: str, bot) -> str:
         """AI Intelligence view."""
-        state = _load_state()
+        state = load_dashboard_state()
         if not state:
-            return "🧠 <b>INTELLIGENCE</b>\n━━━━━━━━━━━━━━━━━━\n⏳ No data available."
+            return "🧠 <b>INTELLIGENCE</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n⏳ No data available."
 
         price = state.get('price', 0)
         regime = state.get('regime', 'unknown')
@@ -803,7 +787,7 @@ class CommandProcessor:
 
         return (
             f"🧠 <b>AI INTELLIGENCE</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📊 <b>MARKET</b>\n"
             f"├─ Price: ${price:,.2f}\n"
             f"├─ Regime: {regime_emoji} {regime.upper()} — {regime_desc}\n"
@@ -824,9 +808,9 @@ class CommandProcessor:
 
     def cmd_portfolio(self, chat_id: int, text: str, bot) -> str:
         """Portfolio view."""
-        state = _load_state()
+        state = load_dashboard_state()
         if not state:
-            return "🤖 <b>PORTFOLIO</b>\n━━━━━━━━━━━━━━━━━━\n⏳ No data available."
+            return "🤖 <b>PORTFOLIO</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n⏳ No data available."
 
         position_side = state.get('position_side', 'FLAT')
         amount = state.get('position_amount', 0)
@@ -853,7 +837,7 @@ class CommandProcessor:
 
         return (
             f"🤖 <b>PORTFOLIO DASHBOARD</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⏱ {testnet_label}\n\n"
             f"📊 <b>POSITION</b>\n"
             f"├─ Side: {side_emoji} {position_side}\n"
@@ -873,9 +857,9 @@ class CommandProcessor:
 
     def cmd_market(self, chat_id: int, text: str, bot) -> str:
         """Market data view."""
-        state = _load_state()
+        state = load_dashboard_state()
         if not state:
-            return "📊 <b>MARKET DATA</b>\n━━━━━━━━━━━━━━━━━━\n⏳ No data available."
+            return "📊 <b>MARKET DATA</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n⏳ No data available."
 
         price = state.get('price', 0)
         regime = state.get('regime', 'unknown')
@@ -898,7 +882,7 @@ class CommandProcessor:
 
         return (
             f"📊 <b>MARKET DATA</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"💰 <b>PRICE</b>\n"
             f"├─ Current: ${price:,.2f}\n"
             f"├─ Regime: {regime_emoji} {regime.upper()}\n"
@@ -914,9 +898,9 @@ class CommandProcessor:
 
     def cmd_risk(self, chat_id: int, text: str, bot) -> str:
         """Risk status view."""
-        state = _load_state()
+        state = load_dashboard_state()
         if not state:
-            return "🛡️ <b>RISK STATUS</b>\n━━━━━━━━━━━━━━━━━━\n⏳ No data available."
+            return "🛡️ <b>RISK STATUS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━\n⏳ No data available."
 
         daily_trades = state.get('daily_trades', 0)
         max_trades = state.get('daily_max_trades', 5)
@@ -945,7 +929,7 @@ class CommandProcessor:
 
         return (
             f"🛡️ <b>RISK STATUS</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📋 <b>DAILY LIMITS</b>\n"
             f"├─ Trades: {daily_trades}/{max_trades}\n"
             f"├─ Status: {trade_limit_status}\n"
@@ -961,3 +945,68 @@ class CommandProcessor:
             f"├─ Leverage: {leverage}x\n"
             f"└─ Current PnL: {pnl_pct:+.2f}%"
         )
+
+    # ═══════════════════════════════════════════════════════════════
+    # HELP COMMAND
+    # ═══════════════════════════════════════════════════════════════
+
+    def cmd_help(self, chat_id: int, text: str, bot) -> str:
+        """Get help message"""
+        return (
+            "🤖 <b>NKHEKHE ALPHA — Bot Commands</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📊 <b>Dashboard</b>\n"
+            "  <code>/dashboard</code> — Quick dashboard summary\n"
+            "  <code>/intel</code> — AI intelligence &amp; regime\n"
+            "  <code>/portfolio</code> — Portfolio &amp; position\n"
+            "  <code>/market</code> — Market data &amp; indicators\n"
+            "  <code>/risk</code> — Risk status &amp; protection\n\n"
+            "🚀 <b>Futures Trading (75x)</b>\n"
+            "  <code>/long [qty]</code> — Open LONG\n"
+            "  <code>/short [qty]</code> — Open SHORT\n"
+            "  <code>/close</code> — Close position\n"
+            "  <code>/balance</code> — Wallet balance\n"
+            "  <code>/positions</code> — Open positions\n"
+            "  <code>/leverage [1-75]</code> — Set leverage\n"
+            "  <code>/signal</code> — Trading signal\n"
+            "  <code>/history</code> — Trade history\n"
+            "  <code>/trade</code> — Trading status\n\n"
+            "⚙️ <b>System Control</b>\n"
+            "  <code>/systemon</code> — Start all components\n"
+            "  <code>/systemoff</code> — Stop all components\n"
+            "  <code>/sys</code> — Quick status check\n\n"
+            "ℹ️ <b>System Info</b>\n"
+            "  <code>/status</code> — Detailed status\n"
+            "  <code>/workflows</code> — Active workflows\n"
+            "  <code>/agents</code> — Agent statuses\n"
+            "  <code>/logs</code> — Recent logs\n"
+            "  <code>/metrics</code> — System metrics\n"
+            "  <code>/alerts</code> — Recent alerts\n"
+            "  <code>/help</code> — Show this help"
+        )
+    
+    # ═══════════════════════════════════════════════════════════════
+    # UTILITIES
+    # ═══════════════════════════════════════════════════════════════
+
+    def _format_uptime(self, seconds: float) -> str:
+        """Format uptime seconds to human readable string"""
+        if seconds is None:
+            return "unknown"
+        
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        else:
+            return f"{minutes}m"
+    
+    def _get_severity_emoji(self, severity: str) -> str:
+        """Get emoji for severity level"""
+        return {
+            'critical': '⚠️',
+            'warning': '🟡',
+            'error': '❌',
+            'info': 'ℹ️'
+        }.get(severity, 'ℹ️')
