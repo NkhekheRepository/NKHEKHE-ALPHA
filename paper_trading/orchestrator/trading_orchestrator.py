@@ -25,6 +25,9 @@ from paper_trading.interfaces import (
     ScoringLayer, RiskLayer, ExecutionLayer, MemoryLayer
 )
 
+from ..layers.layer2_risk.correlation_control import CorrelationControl
+from ..layers.layer2_risk.portfolio_optimizer import PortfolioOptimizer
+
 
 class TradingOrchestrator:
     """
@@ -45,6 +48,7 @@ class TradingOrchestrator:
         self.leverage = self.config.get('trading', {}).get('leverage', 75)
         
         self._init_layers()
+        self._init_portfolio_components()
         self._setup_signal_handlers()
         
         logger.info("TradingOrchestrator initialized")
@@ -118,6 +122,15 @@ class TradingOrchestrator:
                 self.layers['memory'].initialize()
         
         logger.info(f"Initialized {len(self.layers)} layers: {list(self.layers.keys())}")
+    
+    def _init_portfolio_components(self):
+        """Initialize correlation control and portfolio optimizer"""
+        risk_config = self.config.get('layers', {}).get('risk', {})
+        
+        self.correlation_control = CorrelationControl(risk_config)
+        self.portfolio_optimizer = PortfolioOptimizer(risk_config)
+        
+        logger.info("Initialized portfolio components: CorrelationControl, PortfolioOptimizer")
     
     def _create_layer(self, name: str, config: Dict[str, Any]) -> Optional[BaseLayer]:
         """Create a layer instance based on type"""
@@ -285,6 +298,42 @@ class TradingOrchestrator:
                 layer_name='orchestrator',
                 metadata={'layer_outputs': layer_outputs}
             )
+        
+        # Step 6b: Correlation risk check
+        try:
+            price = market_data.get('price', 0)
+            if price > 0:
+                self.correlation_control.add_price(symbol, price, time.time())
+                self.correlation_control.compute_correlation_matrix()
+            
+            corr_risk = self.correlation_control.check_correlation_risk(symbol, positions)
+            layer_outputs['correlation'] = corr_risk
+            
+            if corr_risk.get('max_correlation', 0) > self.correlation_control.max_correlation:
+                logger.warning(f"Correlation risk detected: {corr_risk}")
+        except Exception as e:
+            logger.error(f"Correlation check error: {e}")
+        
+        # Step 6c: Portfolio optimization
+        try:
+            return_pct = (price - risk_result.get('entry_price', price)) / price * 100 if price > 0 else 0
+            self.portfolio_optimizer.add_return(symbol, return_pct)
+            
+            assets = list(positions.keys()) + [symbol]
+            signals = {symbol: scored_signal}
+            
+            allocations = self.portfolio_optimizer.optimize(assets, balance, signals)
+            
+            if symbol in allocations:
+                optimal_size = allocations[symbol] / price if price > 0 else 0
+                scored_signal['position_size'] = min(
+                    scored_signal.get('position_size', 0),
+                    optimal_size
+                )
+            
+            layer_outputs['portfolio'] = {'allocations': allocations}
+        except Exception as e:
+            logger.error(f"Portfolio optimization error: {e}")
         
         # Step 7: Execute
         scored_signal['position_size'] = risk_result.get('position_size', 0)

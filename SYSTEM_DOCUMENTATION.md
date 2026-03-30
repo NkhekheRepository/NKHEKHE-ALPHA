@@ -24,7 +24,7 @@ NKHEKHE ALPHA is a comprehensive autonomous quantitative trading system designed
 │  │  Layer 3: STRATEGY      - CtaTemplate, Signal Generation            │   │
 │  │  Layer 4: INTELLIGENCE  - HMM, PPO, Markov Decision Tree            │   │
 │  │  Layer 5: SCORING       - Trade opportunity scoring                  │   │
-│  │  Layer 6: RISK          - 75x Leverage, Position Sizing              │   │
+│  │  Layer 6: RISK          - 75x Leverage, Correlation, Portfolio      │   │
 │  │  Layer 7: EXECUTION     - VNPY Order Management                     │   │
 │  │  Layer 8: MEMORY        - PostgreSQL + Redis                        │   │
 │  │  Layer 9: SELF-HEALING  - Auto-restart, Fallbacks                  │   │
@@ -233,6 +233,18 @@ class RiskEngine:
 - Immediate trading halt
 - Closes all open positions
 - Notification to Telegram
+
+**Correlation Control** (`correlation_control.py`):
+- Rolling correlation matrix computation
+- High correlation detection between assets (>0.7)
+- Portfolio diversification scoring
+- Reduces exposure to highly correlated positions
+
+**Portfolio Optimizer** (`portfolio_optimizer.py`):
+- Mean-variance optimization (Markowitz)
+- Risk parity allocation
+- Kelly criterion position sizing
+- Efficient frontier calculation
 
 ---
 
