@@ -63,7 +63,11 @@ class DecisionReporter:
         """Send comprehensive decision report to Telegram."""
         try:
             report = self._build_report(data)
-            self._send_telegram(report)
+            result = self._send_telegram(report)
+            if result:
+                print(f"📱 Decision report sent to Telegram")
+            else:
+                print(f"❌ Failed to send decision report")
             self.last_report_time = time.time()
         except Exception as e:
             print(f"Report send error: {e}")
