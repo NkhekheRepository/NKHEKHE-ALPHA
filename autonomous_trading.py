@@ -1,9 +1,29 @@
 #!/usr/bin/env python3
 """
-Autonomous Trading Bot - Enhanced Version with Continuous Decision Reports
-=========================================================================
-Self-learning, self-healing, adaptive trading with 75x leverage.
-Sends continuous decision reports to Telegram every 30 seconds.
+Autonomous Trading Bot
+=====================
+Self-learning, self-healing, adaptive trading system with 75x leverage.
+
+Features:
+- Max 5 trades per day for risk management
+- Continuous decision reports to Telegram (every 30 seconds)
+- Daily comprehensive performance reports
+- HMM regime detection (bull, bear, volatile, sideways)
+- Self-learning engine with online training
+- Adaptive strategy switching
+- Risk engine with stop-loss (2%) and take-profit (5%)
+- Circuit breaker protection
+- Self-healing on API errors
+
+Usage:
+    python autonomous_trading.py
+
+Telegram Commands:
+    /trade - Trading status
+    /balance - Check balance  
+    /positions - Open positions
+
+See AUTONOMOUS_TRADING.md for full documentation.
 """
 
 import sys

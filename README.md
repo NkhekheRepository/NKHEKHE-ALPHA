@@ -372,6 +372,42 @@ sudo systemctl enable financial-orchestrator
 sudo systemctl start financial-orchestrator
 ```
 
+## Autonomous Trading Bot
+
+The autonomous trading bot is a self-learning, self-healing trading system with 75x leverage on Binance Futures.
+
+### Key Features
+- **Max 5 Trades/Day** - Risk-managed trading
+- **Self-Learning** - Learns from trade outcomes
+- **Adaptive Strategy** - Switches based on market regime
+- **Continuous Reports** - 30-second Telegram updates
+- **Daily Reports** - Comprehensive performance summaries
+
+### Files
+| File | Description |
+|------|-------------|
+| `autonomous_trading.py` | Main trading bot |
+| `AUTONOMOUS_TRADING.md` | Full documentation |
+| `docs/AUTONOMOUS_QUICKSTART.md` | Quick start guide |
+
+### Quick Start
+```bash
+# Start trading bot
+nohup ./venv/bin/python3 -u autonomous_trading.py > logs/autonomous_trading.log 2>&1 &
+
+# Check status
+ps aux | grep autonomous_trading
+tail -f logs/autonomous_trading.log
+```
+
+### Telegram Commands
+- `/trade` - Trading status
+- `/balance` - Check balance
+- `/positions` - Open positions
+- `/long [qty]` - Open LONG
+- `/short [qty]` - Open SHORT
+- `/close` - Close position
+
 ## Configuration
 
 ### Agent Configuration
