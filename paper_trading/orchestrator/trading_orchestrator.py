@@ -27,6 +27,11 @@ from paper_trading.interfaces import (
 
 from ..layers.layer2_risk.correlation_control import CorrelationControl
 from ..layers.layer2_risk.portfolio_optimizer import PortfolioOptimizer
+from ..layers.layer10_events.event_bus import EventBus, EventType
+from ..layers.layer4_intelligence.uncertainty_model import UncertaintyModel
+from ..layers.layer4_intelligence.exploration_engine import ExplorationEngine
+from ..layers.layer5_validation.model_validator import ModelValidator
+from ..layers.layer4_intelligence.evolution_engine import EvolutionEngine
 
 
 class TradingOrchestrator:
@@ -49,6 +54,7 @@ class TradingOrchestrator:
         
         self._init_layers()
         self._init_portfolio_components()
+        self._init_advanced_components()
         self._setup_signal_handlers()
         
         logger.info("TradingOrchestrator initialized")
@@ -132,6 +138,21 @@ class TradingOrchestrator:
         
         logger.info("Initialized portfolio components: CorrelationControl, PortfolioOptimizer")
     
+    def _init_advanced_components(self):
+        """Initialize exploration, uncertainty, validation, evolution, and event bus"""
+        risk_config = self.config.get('layers', {}).get('risk', {})
+        
+        self.event_bus = EventBus()
+        self.uncertainty_model = UncertaintyModel(risk_config)
+        self.exploration_engine = ExplorationEngine(risk_config)
+        self.model_validator = ModelValidator(risk_config)
+        self.evolution_engine = EvolutionEngine(risk_config)
+        
+        self._trade_count = 0
+        self._last_regime = 'sideways'
+        
+        logger.info("Initialized advanced components: EventBus, UncertaintyModel, ExplorationEngine, ModelValidator, EvolutionEngine")
+    
     def _create_layer(self, name: str, config: Dict[str, Any]) -> Optional[BaseLayer]:
         """Create a layer instance based on type"""
         try:
@@ -189,6 +210,11 @@ class TradingOrchestrator:
         """Start the trading orchestrator"""
         self.running = True
         self.autonomous_mode = autonomous
+        
+        self.event_bus.publish_simple(
+            EventType.SYSTEM_START, 'orchestrator',
+            {'autonomous': autonomous, 'symbol': self.symbol, 'leverage': self.leverage}
+        )
         
         logger.info(f"TradingOrchestrator started (autonomous: {autonomous})")
         
@@ -254,12 +280,48 @@ class TradingOrchestrator:
         signal_data = result.result
         layer_outputs['strategy'] = result.to_dict()
         
+        # Step 3.5: Exploration check
+        try:
+            exploration_result = self.exploration_engine.should_explore()
+            layer_outputs['exploration'] = exploration_result.to_dict()
+            
+            if exploration_result.should_explore:
+                logger.info(f"Exploration mode: {exploration_result.reason}")
+                signal_data['explore_exploit'] = 'explore'
+                signal_data['position_size'] = signal_data.get('position_size', 0) * exploration_result.test_size_multiplier
+            else:
+                signal_data['explore_exploit'] = 'exploit'
+        except Exception as e:
+            logger.error(f"Exploration check error: {e}")
+            exploration_result = None
+        
         # Step 4: Intelligence (regime detection)
         result = self._safe_execute('intelligence', features=features)
         regime = 'sideways'
         if result.success and result.result:
             regime = result.result.get('regime', 'sideways')
         layer_outputs['intelligence'] = result.to_dict()
+        
+        # Emit regime change event
+        if regime != self._last_regime:
+            self.event_bus.publish_simple(
+                EventType.REGIME_CHANGED, 'orchestrator',
+                {'old_regime': self._last_regime, 'new_regime': regime, 'symbol': symbol}
+            )
+            logger.info(f"Regime changed: {self._last_regime} -> {regime}")
+            self._last_regime = regime
+        
+        # Step 4.5: Uncertainty prediction
+        try:
+            self.uncertainty_model.add_return(symbol, market_data.get('change_pct_24h', 0) / 100)
+            uncertain_pred = self.uncertainty_model.predict(symbol, features, regime)
+            layer_outputs['uncertainty'] = uncertain_pred.to_dict()
+            
+            if uncertain_pred.confidence > 0:
+                logger.debug(f"Uncertainty: mean={uncertain_pred.mean:.4f}, std={uncertain_pred.std:.4f}, conf={uncertain_pred.confidence:.2f}")
+        except Exception as e:
+            logger.error(f"Uncertainty prediction error: {e}")
+            uncertain_pred = None
         
         # Step 5: Scoring
         result = self._safe_execute('scoring', 
@@ -311,6 +373,10 @@ class TradingOrchestrator:
             
             if corr_risk.get('max_correlation', 0) > self.correlation_control.max_correlation:
                 logger.warning(f"Correlation risk detected: {corr_risk}")
+                self.event_bus.publish_simple(
+                    EventType.RISK_ALERT, 'correlation_control',
+                    {'symbol': symbol, 'corr_risk': corr_risk}
+                )
         except Exception as e:
             logger.error(f"Correlation check error: {e}")
         
@@ -335,6 +401,52 @@ class TradingOrchestrator:
         except Exception as e:
             logger.error(f"Portfolio optimization error: {e}")
         
+        # Step 6c2: Uncertainty-based position size adjustment
+        if uncertain_pred and uncertain_pred.confidence > 0:
+            try:
+                base_size = scored_signal.get('position_size', 0)
+                adjusted_size = self.uncertainty_model.adjust_position_size(base_size, uncertain_pred)
+                if adjusted_size != base_size:
+                    logger.info(f"Uncertainty adjustment: {base_size:.6f} -> {adjusted_size:.6f} (conf={uncertain_pred.confidence:.2f})")
+                scored_signal['position_size'] = adjusted_size
+                layer_outputs['uncertainty_adjustment'] = {
+                    'original_size': base_size,
+                    'adjusted_size': adjusted_size,
+                    'confidence': uncertain_pred.confidence
+                }
+            except Exception as e:
+                logger.error(f"Uncertainty size adjustment error: {e}")
+        
+        # Step 6d: Model validation (every 50 trades)
+        if self._trade_count % 50 == 0:
+            try:
+                validation_result = self.model_validator.comprehensive_validation(symbol)
+                layer_outputs['validation'] = validation_result
+                
+                if not validation_result['valid']:
+                    logger.warning(f"Model validation FAILED: {validation_result['recommendation']}")
+                    self.event_bus.publish_simple(
+                        EventType.RISK_ALERT, 'model_validator',
+                        {'symbol': symbol, 'result': validation_result}
+                    )
+                else:
+                    logger.info(f"Model validation passed (trade #{self._trade_count})")
+            except Exception as e:
+                logger.error(f"Model validation error: {e}")
+        
+        # Step 6e: Evolution engine (every 100 trades)
+        if self._trade_count % 100 == 0:
+            try:
+                evolved_population = self.evolution_engine.evolve()
+                best_genomes = self.evolution_engine.get_best_genomes(3)
+                layer_outputs['evolution'] = {
+                    'generation': self.evolution_engine.generation,
+                    'best_genomes': best_genomes
+                }
+                logger.info(f"Evolution: gen {self.evolution_engine.generation}, best fitness: {best_genomes[0]['fitness']:.4f}" if best_genomes else "Evolution: no genomes yet")
+            except Exception as e:
+                logger.error(f"Evolution engine error: {e}")
+        
         # Step 7: Execute
         scored_signal['position_size'] = risk_result.get('position_size', 0)
         scored_signal['stop_loss'] = risk_result.get('stop_loss')
@@ -344,6 +456,33 @@ class TradingOrchestrator:
                                     action='open',
                                     signal=scored_signal)
         layer_outputs['execution'] = result.to_dict()
+        
+        # Emit trade events
+        if result.success:
+            self.event_bus.publish_simple(
+                EventType.TRADE_OPENED, 'orchestrator',
+                {'symbol': symbol, 'action': scored_signal.get('action', 'hold'),
+                 'position_size': scored_signal.get('position_size', 0),
+                 'regime': regime, 'explore_exploit': signal_data.get('explore_exploit', 'exploit')}
+            )
+            self._trade_count += 1
+            
+            # Record trade result for exploration and evolution engines
+            try:
+                return_pct = 0  # Will be updated on close
+                self.exploration_engine.record_outcome(
+                    scored_signal.get('action', 'hold'), return_pct,
+                    signal_data.get('explore_exploit', 'exploit') == 'explore'
+                )
+                self.model_validator.add_trade(symbol, return_pct)
+                self.evolution_engine.record_result('default', return_pct)
+            except Exception as e:
+                logger.error(f"Trade recording error: {e}")
+        else:
+            self.event_bus.publish_simple(
+                EventType.TRADE_FAILED, 'orchestrator',
+                {'symbol': symbol, 'error': result.error}
+            )
         
         # Step 8: Save to memory
         self._safe_execute('memory',
@@ -447,6 +586,15 @@ class TradingOrchestrator:
     def stop(self):
         """Stop the trading orchestrator"""
         self.running = False
+        
+        try:
+            self.event_bus.publish_simple(
+                EventType.SYSTEM_STOP, 'orchestrator',
+                {'trade_count': self._trade_count}
+            )
+        except:
+            pass
+        
         logger.info("TradingOrchestrator stopped")
         
         if 'memory' in self.layers:
@@ -467,11 +615,19 @@ class TradingOrchestrator:
                 'autonomous_mode': self.autonomous_mode,
                 'symbol': self.symbol,
                 'leverage': self.leverage,
-                'update_interval': self.update_interval
+                'update_interval': self.update_interval,
+                'trade_count': getattr(self, '_trade_count', 0)
             },
             'layers': {
-                name: layer.get_status() 
+                name: layer.get_status()
                 for name, layer in self.layers.items()
+            },
+            'advanced_components': {
+                'event_bus': self.event_bus.get_stats() if hasattr(self, 'event_bus') else None,
+                'uncertainty_model': self.uncertainty_model.get_status() if hasattr(self, 'uncertainty_model') else None,
+                'exploration_engine': self.exploration_engine.get_status() if hasattr(self, 'exploration_engine') else None,
+                'model_validator': self.model_validator.get_status() if hasattr(self, 'model_validator') else None,
+                'evolution_engine': self.evolution_engine.get_status() if hasattr(self, 'evolution_engine') else None
             }
         }
     

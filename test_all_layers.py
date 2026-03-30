@@ -443,6 +443,7 @@ def test_orchestrator():
     finally:
         os.unlink(config_path)
 
+
 @test("Layer count: all 25 layers/interfaces exist")
 def test_layer_count():
     expected = [
@@ -452,6 +453,94 @@ def test_layer_count():
     for layer in expected:
         module = __import__(f'paper_trading.interfaces.{layer}', fromlist=[''])
         assert module is not None
+
+
+# ============================================================
+# TEST: ORCHESTRATOR FULL INTEGRATION
+# ============================================================
+@test("Orchestrator: all 5 new components initialized")
+def test_orchestrator_advanced_components():
+    from paper_trading.orchestrator.trading_orchestrator import TradingOrchestrator
+    import yaml
+    import tempfile
+
+    config = {
+        'trading': {'symbol': 'BTCUSDT', 'leverage': 75, 'update_interval': 30},
+        'layers': {
+            'data': {'enabled': False},
+            'features': {'enabled': False},
+            'strategy': {'enabled': False},
+            'intelligence': {'enabled': False},
+            'scoring': {'enabled': False},
+            'risk': {'enabled': False},
+            'execution': {'enabled': False},
+            'memory': {'enabled': False}
+        }
+    }
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        yaml.dump(config, f)
+        config_path = f.name
+
+    try:
+        orch = TradingOrchestrator(config_path)
+        assert hasattr(orch, 'event_bus')
+        assert hasattr(orch, 'uncertainty_model')
+        assert hasattr(orch, 'exploration_engine')
+        assert hasattr(orch, 'model_validator')
+        assert hasattr(orch, 'evolution_engine')
+        assert hasattr(orch, '_trade_count')
+    finally:
+        os.unlink(config_path)
+
+
+@test("Orchestrator: get_full_status() includes advanced components")
+def test_orchestrator_status():
+    from paper_trading.orchestrator.trading_orchestrator import TradingOrchestrator
+    import yaml
+    import tempfile
+
+    config = {
+        'trading': {'symbol': 'BTCUSDT', 'leverage': 75, 'update_interval': 30},
+        'layers': {
+            'data': {'enabled': False},
+            'features': {'enabled': False},
+            'strategy': {'enabled': False},
+            'intelligence': {'enabled': False},
+            'scoring': {'enabled': False},
+            'risk': {'enabled': False},
+            'execution': {'enabled': False},
+            'memory': {'enabled': False}
+        }
+    }
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        yaml.dump(config, f)
+        config_path = f.name
+
+    try:
+        orch = TradingOrchestrator(config_path)
+        status = orch.get_full_status()
+
+        assert 'orchestrator' in status
+        assert 'layers' in status
+        assert 'advanced_components' in status
+
+        adv = status['advanced_components']
+        assert 'event_bus' in adv
+        assert 'uncertainty_model' in adv
+        assert 'exploration_engine' in adv
+        assert 'model_validator' in adv
+        assert 'evolution_engine' in adv
+
+        # Each should have a status dict
+        assert adv['event_bus'] is not None
+        assert adv['uncertainty_model'] is not None
+        assert adv['exploration_engine'] is not None
+        assert adv['model_validator'] is not None
+        assert adv['evolution_engine'] is not None
+    finally:
+        os.unlink(config_path)
 
 
 # ============================================================
