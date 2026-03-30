@@ -27,3 +27,7 @@ flask>=3.0.0
 
 # Telegram Bot
 python-telegram-bot>=20.0
+
+# Async & Live Trading
+aiohttp>=3.9.0
+python-dotenv>=1.0.0
